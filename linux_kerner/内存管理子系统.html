@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linux内存管理子系统详解</title>
+    <!-- TailwindCSS -->
+    <link href="https://fastly.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Framer Motion via CDN -->
+    <script src="https://fastly.jsdelivr.net/npm/framer-motion@10.16.4/dist/framer-motion.min.js"></script>
+    <!-- ECharts -->
+    <script src="https://fastly.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --primary: #0a0e17;
+            --secondary: #171e2e;
+            --accent: #3182ce;
+            --accent-secondary: #805ad5;
+            --accent-tertiary: #38b2ac;
+            --text: #e2e8f0;
+            --text-secondary: #a0aec0;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--primary);
+            color: var(--text);
+            overflow-x: hidden;
+        }
+        
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+        
+        .bento-item {
+            background: linear-gradient(145deg, rgba(23, 30, 46, 0.7), rgba(23, 30, 46, 0.95));
+            border-radius: 1rem;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            transition: transform 0.4s ease, box-shadow 0.4s ease;
+        }
+        
+        .bento-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+        }
+        
+        .gradient-text {
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        
+        .primary-gradient {
+            background-image: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+        }
+        
+        .secondary-gradient {
+            background-image: linear-gradient(135deg, var(--accent-secondary), var(--accent-tertiary));
+        }
+        
+        .tertiary-gradient {
+            background-image: linear-gradient(135deg, var(--accent-tertiary), var(--accent));
+        }
+        
+        .mega-text {
+            font-size: 5rem;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            line-height: 1;
+        }
+        
+        .code-block {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-x: auto;
+        }
+        
+        .animation-container {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        
+        .animation-container.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--secondary);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 4px;
+        }
+        
+        /* Line animation */
+        .line-chart {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: dash 3s ease-in-out forwards;
+        }
+        
+        @keyframes dash {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+        
+        /* Navbar */
+        .navbar {
+            backdrop-filter: blur(10px);
+            background: rgba(10, 14, 23, 0.8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .highlight {
+            position: relative;
+        }
+        
+        .highlight::after {
+            content: "";
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--accent);
+            transform: scaleX(0);
+            transform-origin: right;
+            transition: transform 0.3s ease;
+        }
+        
+        .highlight:hover::after {
+            transform: scaleX(1);
+            transform-origin: left;
+        }
+        
+        /* Hero section */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+        }
+        
+        .hero-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.05;
+            background-image: radial-gradient(circle at 20% 30%, rgba(49, 130, 206, 0.3) 0%, transparent 70%), 
+                            radial-gradient(circle at 80% 70%, rgba(128, 90, 213, 0.3) 0%, transparent 70%);
+        }
+        
+        /* Animation for scroll reveal */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .animate-on-scroll {
+            opacity: 0;
+        }
+        
+        .animated {
+            animation: fadeIn 0.8s ease forwards;
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body>
+    <!-- Navbar -->
+    <nav id="de436c26-e578-41a0-9e23-b498cef898be" class="navbar fixed w-full z-50 px-4 py-3">
+        <div id="95e1e2db-a526-455b-95ff-30bb50ec1f31" class="container mx-auto flex justify-between items-center">
+            <a id="a187bf7f-f556-4376-a622-d75b46650e81" href="#" class="text-2xl font-bold gradient-text primary-gradient">
+                内存管理<span class="text-sm ml-1 text-gray-400">Memory Management</span>
+            </a>
+            <div id="0ee8fd92-b14b-40f4-a4c1-dbe7c500b147" class="hidden md:flex space-x-8">
+                <a id="43c334fe-b946-4ed7-a1af-7b86a61e46e4" href="#architecture" class="text-gray-300 hover:text-white highlight">架构概览</a>
+                <a id="2240aa0f-95cb-4d4f-8336-85b0ed8591df" href="#physical" class="text-gray-300 hover:text-white highlight">物理内存</a>
+                <a id="9c700d82-6657-4a32-ad72-066418189049" href="#virtual" class="text-gray-300 hover:text-white highlight">虚拟内存</a>
+                <a id="2e9fff59-c901-4624-bb10-dd35493c5bfe" href="#advanced" class="text-gray-300 hover:text-white highlight">高级特性</a>
+            </div>
+            <button id="dffd76e0-b9dd-47d9-91fe-1aa1d83de25a" class="md:hidden text-white">
+                <i id="fc9e33ac-01e7-430b-a7bc-0fc424a5318d" class="fas fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="380fcc17-06b7-4d30-a6eb-4168204d6a37" class="hero relative px-4 pt-24 pb-16">
+        <div id="97ad51ba-c505-46a8-bf91-88e2c561d14c" class="hero-bg"></div>
+        <div id="029d72ec-5144-4cf8-a502-78e3dd725d3a" class="container mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div id="2f5e4ea6-6ba7-4be1-9b14-ba5080f9a296" class="animation-container">
+                <h1 id="3720b8c7-af95-4d78-bd80-3f8eb96eca74" class="mega-text mb-4">Linux<br>内存管理<br><span class="gradient-text primary-gradient">子系统</span></h1>
+                <p id="be35ed7d-380c-4c6a-9768-97638f58275f" class="text-xl text-gray-300 mb-8">深入探索内核中最核心的组件之一，揭秘<span class="text-white font-semibold">内存管理</span>的架构、机制与实现细节</p>
+                <div id="ab2ce659-c910-474e-ad2f-9e2c84e4fdb3" class="flex space-x-4">
+                    <a id="1d28e415-d3db-4e17-9c23-bde9c1235c85" href="#architecture" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all flex items-center">
+                        <i id="e5b1ea1a-9c0d-4752-83f0-878fe6f61fbc" class="fas fa-book-open mr-2"></i>开始学习
+                    </a>
+                    <a id="c97a0eb1-dbe1-4e14-a125-c093561d0c66" href="https://github.com/torvalds/linux/tree/master/mm" target="_blank" class="px-6 py-3 border border-gray-600 hover:border-gray-400 text-gray-300 hover:text-white rounded-lg transition-all flex items-center">
+                        <i id="f0ed031e-2f71-4eb9-b1ab-917588e40e25" class="fab fa-github mr-2"></i>源码
+                    </a>
+                </div>
+            </div>
+            <div id="8e79bc60-16c5-42a4-b0a7-f89704997fc3" class="animation-container relative">
+                <div id="92e64403-e201-46ad-926c-93adeeae05d7" class="absolute top-0 right-0 -mr-4 -mt-4 w-64 h-64 bg-blue-500 rounded-full filter blur-3xl opacity-20"></div>
+                <div id="fd1a7206-56b1-4573-a456-802fe58ec31c" class="absolute bottom-0 left-0 -ml-4 -mb-4 w-64 h-64 bg-purple-500 rounded-full filter blur-3xl opacity-20"></div>
+                <div id="caf3e548-9914-42c1-8893-ea575a20ee48" class="relative z-10">
+                    <div id="memory-management-diagram" class="w-full h-[400px]"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Architecture Overview Section -->
+    <section id="architecture" class="py-20 px-4">
+        <div id="c9820e0d-1a9f-4fa1-b07e-d9e13f4e5eaa" class="container mx-auto mb-16 animate-on-scroll">
+            <h2 id="ed2cca2b-365e-429c-b0bc-52f36fb875b6" class="text-4xl md:text-5xl font-bold mb-4">内存管理<span class="text-sm ml-2 text-gray-400">子系统架构</span></h2>
+            <div id="cbcabcf0-7183-481a-b7ba-be53cfdac5b6" class="w-32 h-1 bg-blue-600 mb-8"></div>
+            <p id="580a4b92-7c57-4b89-8746-2e7a9671a875" class="text-xl text-gray-300">Linux内存管理子系统是整个内核的核心组件之一，它负责管理计算机系统中最宝贵的资源之一 - <span class="font-semibold text-white">内存</span>。</p>
+        </div>
+
+        <div id="3f618472-db1c-4ace-bbc9-670e26898721" class="bento-grid container mx-auto">
+            <!-- Architecture Overview -->
+            <div id="2eb5b8c0-dc00-4212-a24e-6abd86eff0f6" class="bento-item col-span-12 md:col-span-8 animate-on-scroll">
+                <h3 id="210cd3df-df81-4fec-ab56-6e2a15917891" class="text-2xl font-bold mb-4">整体架构 <span class="text-sm text-gray-400">System Architecture</span></h3>
+                <div id="memory-architecture-chart" class="w-full h-[400px] my-6"></div>
+                <p id="0d64a994-f0fc-4068-9c34-5e01c2c5f26b" class="text-gray-300">Linux内存管理子系统由多个紧密协作的组件构成，包括物理内存管理、虚拟内存管理、页面回收、内存分配器等，它们共同构建了一个高效、灵活的内存管理框架。</p>
+            </div>
+
+            <!-- Key Components -->
+            <div id="e227ad23-e251-4043-986e-d78a675e6be8" class="bento-item col-span-12 md:col-span-4 animate-on-scroll">
+                <h3 id="798ef26c-5cfd-4c0a-9fc7-4ef118d393f0" class="text-2xl font-bold mb-6">核心组件 <span class="text-sm text-gray-400">Key Components</span></h3>
+                <ul id="cca5621c-7db1-493a-8531-aa388a9eec7f" class="space-y-4">
+                    <li id="8a443b56-fc26-4cf3-935a-fd487206f255" class="flex items-start">
+                        <div id="b6e73458-86fa-42e8-ad00-bd97ec6766ac" class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center mr-3 mt-1">
+                            <i id="410720c3-49f7-4629-a2f0-deba7b149d2b" class="fas fa-microchip"></i>
+                        </div>
+                        <div id="c81f074d-db05-477a-be83-798c7fbc96de">
+                            <h4 id="95d4f108-1ea0-47e7-ab40-fa777629a749" class="font-semibold">物理内存管理</h4>
+                            <p id="237cbb60-af54-4962-a72e-f94f53e71812" class="text-sm text-gray-400">包括伙伴系统、每CPU页帧缓存和内存区域</p>
+                        </div>
+                    </li>
+                    <li id="cd00b8c5-6ef2-4cdd-bf70-cd73be94aee8" class="flex items-start">
+                        <div id="174f6cee-6ed2-4196-bc99-4537c560325a" class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center mr-3 mt-1">
+                            <i id="6b318c3c-b029-4be3-8fa1-ca9bac624b9b" class="fas fa-sitemap"></i>
+                        </div>
+                        <div id="e59ea682-f212-476c-834f-39a8b16d6464">
+                            <h4 id="e4615084-c782-41f5-bb63-440f223f80b2" class="font-semibold">虚拟内存管理</h4>
+                            <p id="c2a82f35-3c70-4667-886e-75ad492a41d5" class="text-sm text-gray-400">包括页表机制、TLB管理和地址空间管理</p>
+                        </div>
+                    </li>
+                    <li id="3a287b1b-d835-4cc1-a3fb-063c3f8e5401" class="flex items-start">
+                        <div id="965ca055-bbcb-4cd5-8fd8-e150c3af225a" class="flex-shrink-0 w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center mr-3 mt-1">
+                            <i id="ed7f3091-38e1-4695-a410-5b20d96a81c9" class="fas fa-recycle"></i>
+                        </div>
+                        <div id="23f0e68d-842c-47df-bd7f-13e26de94611">
+                            <h4 id="b3f2ffda-4d17-4013-bd0d-89c35580b6e2" class="font-semibold">内存回收</h4>
+                            <p id="9c203310-57fa-4f48-9aed-8f7aff00bd26" class="text-sm text-gray-400">包括页面回收、交换和OOM Killer</p>
+                        </div>
+                    </li>
+                    <li id="8162cea6-7503-44e6-82a8-d73a931cb77e" class="flex items-start">
+                        <div id="4ba762ec-29ec-4d23-926e-41d69baba8f3" class="flex-shrink-0 w-8 h-8 rounded-full bg-red-600 flex items-center justify-center mr-3 mt-1">
+                            <i id="e5b2d753-c1d1-4be8-9463-9b18c949db25" class="fas fa-boxes"></i>
+                        </div>
+                        <div id="b1b102a5-bb62-4ff6-9b6c-41d187893310">
+                            <h4 id="9e87ea1e-e271-4825-bfd0-5c15980e0b51" class="font-semibold">内存分配器</h4>
+                            <p id="59fcbf06-efc3-4cb2-b0f4-451692dfdc26" class="text-sm text-gray-400">包括Slab/Slub/Slob分配器和kmalloc</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Physical Memory Management Section -->
+    <section id="physical" class="py-20 px-4 bg-gradient-to-b from-[#0a0e17] to-[#111827]">
+        <div id="e166812b-5b91-4bc8-b0dc-29b0fc55cff6" class="container mx-auto mb-16 animate-on-scroll">
+            <h2 id="8b77ec71-0dba-4772-a07a-f1b710b59c04" class="text-4xl md:text-5xl font-bold mb-4">物理内存管理 <span class="text-sm ml-2 text-gray-400">Physical Memory</span></h2>
+            <div id="123ea0fe-5b3f-431c-8a60-48e8b2a44683" class="w-32 h-1 bg-blue-600 mb-8"></div>
+            <p id="26f60a63-b8e5-47c3-99a7-a857b313c207" class="text-xl text-gray-300">物理内存管理是Linux内核内存管理的基础，它直接处理硬件上的物理内存。</p>
+        </div>
+
+        <div id="3d60477f-025d-4341-a941-2d64ab48ffb0" class="bento-grid container mx-auto">
+            <!-- Memory Layout -->
+            <div id="d8b698c8-8a39-494f-ac24-effd87272ea0" class="bento-item col-span-12 md:col-span-6 lg:col-span-4 animate-on-scroll">
+                <h3 id="e1516e04-e32a-4991-928c-711c94b98e71" class="text-2xl font-bold mb-6">内存布局 <span class="text-sm text-gray-400">Memory Layout</span></h3>
+                <div id="05f615e5-81dc-4658-8b9a-a1931f3f90dc" class="flex flex-col space-y-4 mb-6">
+                    <div id="9afae56d-4820-4925-9d17-f55048cbfa5a" class="relative overflow-hidden rounded-lg bg-gray-900 p-4">
+                        <span id="3ebc26c1-f731-4151-9ac1-33b362cebbde" class="gradient-text primary-gradient mega-text block">Zone</span>
+                        <div id="ff8304c9-b53d-450d-b35f-329ed9973dc2" class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-500 filter blur-2xl opacity-20 rounded-full"></div>
+                    </div>
+                </div>
+                <div id="a01c8e8c-92b9-4d96-b158-47aebc4f0089" class="space-y-3">
+                    <div id="3599e4d4-e29c-451a-a1b4-7ab60ef52d4e" class="flex items-center">
+                        <div id="8e89763f-7302-4001-9dae-7f45875815f7" class="w-3 h-3 bg-blue-600 rounded-full mr-2"></div>
+                        <div id="f2a859c2-9d54-48ae-8d04-625c39652655" class="font-medium">ZONE_DMA</div>
+                        <div id="cbca8b97-2058-4375-bd32-143c0f2a8286" class="ml-auto text-sm text-gray-400">低于16MB</div>
+                    </div>
+                    <div id="2721101e-605c-47e7-9fe5-889ef0daeefc" class="flex items-center">
+                        <div id="ff10260c-1753-42ec-8024-dbe5e56ba22a" class="w-3 h-3 bg-indigo-600 rounded-full mr-2"></div>
+                        <div id="e0b53789-e73e-4c5c-aea4-c72418b3b401" class="font-medium">ZONE_DMA32</div>
+                        <div id="fbaf3e50-6bd9-452c-87a2-f8e388bb1c98" class="ml-auto text-sm text-gray-400">低于4GB</div>
+                    </div>
+                    <div id="778c859c-46f3-4efe-82bc-7b2497420f7c" class="flex items-center">
+                        <div id="cf585d1d-b61c-4296-8933-0f93045191aa" class="w-3 h-3 bg-purple-600 rounded-full mr-2"></div>
+                        <div id="0ec4ab51-6ef0-4156-80e3-9e765288a7f1" class="font-medium">ZONE_NORMAL</div>
+                        <div id="84ba381c-e9fc-47ce-9cb2-e69b6c95a391" class="ml-auto text-sm text-gray-400">直接映射区</div>
+                    </div>
+                    <div id="ac5f5a83-afe5-472d-8c99-eaba23ec11e6" class="flex items-center">
+                        <div id="91c13c39-65a3-427e-a8ec-73a94515c2bc" class="w-3 h-3 bg-pink-600 rounded-full mr-2"></div>
+                        <div id="3e30c79a-1ce8-46e0-9848-3b588d464ae1" class="font-medium">ZONE_HIGHMEM</div>
+                        <div id="45ca0fc0-2896-48c1-ae4c-598b4362f1e8" class="ml-auto text-sm text-gray-400">高端内存</div>
+                    </div>
+                    <div id="f3da9143-b31c-4828-8e68-9b35152d76ab" class="flex items-center">
+                        <div id="4a925e7c-8de3-4cc5-902d-ed4bf97e3b4e" class="w-3 h-3 bg-teal-600 rounded-full mr-2"></div>
+                        <div id="54f46e3e-e1de-4587-950d-5627b0a0331e" class="font-medium">ZONE_MOVABLE</div>
+                        <div id="c4bc923e-61c0-498e-bfd1-063b22b63028" class="ml-auto text-sm text-gray-400">可迁移区</div>
+                    </div>
+                </div>
+                <div id="9bd9f71b-c6e0-4dd2-bc4c-1feb6e48dd1f" class="mt-6">
+                    <p id="a5eb546a-8c60-499e-ab6a-233503f4b17d" class="text-sm text-gray-400">Linux内核将物理内存划分为不同的区域(Zone)，以满足不同硬件和功能的需求。</p>
+                </div>
+            </div>
+
+            <!-- Buddy System -->
+            <div id="e3c1d5df-b742-43da-b4a0-1b57796f1181" class="bento-item col-span-12 md:col-span-6 lg:col-span-8 animate-on-scroll">
+                <h3 id="24914a61-81ed-44eb-95eb-e3d523d702fa" class="text-2xl font-bold mb-6">伙伴系统 <span class="text-sm text-gray-400">Buddy System</span></h3>
+                <div id="0c4e22be-a583-404d-abd5-45471afe79a2" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div id="78ac698f-75ce-41c7-b5f6-7cd4ca7096dd">
+                        <div id="buddy-system-chart" class="w-full h-[250px]"></div>
+                    </div>
+                    <div id="2cbbbe3a-5b93-4ca0-b2a5-f33fff2d85d3">
+                        <p id="3ee5b723-1334-4b04-834b-01ad170e6903" class="text-gray-300 mb-4">伙伴系统是Linux内核中最重要的物理内存分配机制，负责分配物理页面。其核心思想是将内存分为大小为2的幂次方的连续页块，通过分裂和合并这些页块来满足内存分配需求。</p>
+                        <div id="1f989a1d-f2ed-4292-b89e-77cb0259e694" class="flex items-center mb-3">
+                            <div id="be8b443a-5312-49b2-b927-1100758568e8" class="w-3 h-3 bg-blue-600 rounded-full mr-2"></div>
+                            <span id="66e5bd7f-bc8b-49fe-91c2-ed01c550c5c4" class="font-medium">分配</span>
+                            <span id="9c3ba180-e4a3-4c34-8d97-2467a6f3e63c" class="text-sm text-gray-400 ml-2">通过分裂满足需求</span>
+                        </div>
+                        <div id="d3704e9c-766a-47ab-ad2a-150fee40c28d" class="flex items-center">
+                            <div id="ab09bac0-5efc-470c-a825-cf511c48994d" class="w-3 h-3 bg-purple-600 rounded-full mr-2"></div>
+                            <span id="246d6049-6b61-4f58-9559-91e66842665a" class="font-medium">释放</span>
+                            <span id="5bd992bc-39f1-451b-b801-74e61ac6a469" class="text-sm text-gray-400 ml-2">通过合并减少碎片</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="18dc6127-305b-4a8a-94dc-74dd9b173903" class="code-block text-xs md:text-sm">
+                    <pre id="e26c1535-e4bb-43da-9bce-ae60d240ba62"><code>struct page *__alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
+                                 int preferred_nid, nodemask_t *nodemask)
+{
+    /* ... */
+    page = get_page_from_freelist(gfp_mask, order, ...);
+    if (likely(page))
+        goto out;
+        
+    page = __alloc_pages_slowpath(gfp_mask, order, ...);
+    /* ... */
+}</code></pre>
+                </div>
+            </div>
+
+            <!-- Per-CPU Page Cache -->
+            <div id="985dc68c-749f-44f3-83be-e9a35d722cfb" class="bento-item col-span-12 md:col-span-4 animate-on-scroll">
+                <h3 id="8d810bc0-df69-4d75-a6f5-e4130885444f" class="text-2xl font-bold mb-4">每CPU页帧缓存 <span class="text-sm text-gray-400">Per-CPU Cache</span></h3>
+                <div id="1956c705-f2e1-4bda-a6c9-7aa28f454532" class="bg-gray-900 p-4 rounded-lg mb-4">
+                    <div id="6db8ad0c-638e-45c5-9fe7-33fa0959fa1b" class="flex items-center justify-between mb-2">
+                        <span id="a56f659c-5b79-44f6-859d-44247dcfcdcc" class="text-sm text-gray-400">CPU 0</span>
+                        <span id="a1013db1-1b7a-4553-a42f-eb2a59e67d89" class="text-sm text-gray-400">25 pages</span>
+                    </div>
+                    <div id="6b27c63b-22af-4853-9cf5-886aed38bf84" class="w-full bg-gray-700 rounded-full h-2.5">
+                        <div id="a0fdc904-ed6f-478f-b6f0-c869444ef56a" class="bg-blue-600 h-2.5 rounded-full" style="width: 75%"></div>
+                    </div>
+                </div>
+                <div id="643bc9e9-457e-4249-9e7b-d4ae4abcf8e9" class="bg-gray-900 p-4 rounded-lg mb-4">
+                    <div id="5ae107e9-9726-4fe4-b6be-f4e6ccff7792" class="flex items-center justify-between mb-2">
+                        <span id="bcfbfbde-d389-4164-ac03-34a0ec27bf98" class="text-sm text-gray-400">CPU 1</span>
+                        <span id="8af7a2aa-6933-4635-9a01-79d59795f39d" class="text-sm text-gray-400">18 pages</span>
+                    </div>
+                    <div id="eb6dd811-e309-44ca-8c71-8502e2d9e293" class="w-full bg-gray-700 rounded-full h-2.5">
+                        <div id="a54f8f11-7ea3-4cad-bf40-6a9880f6c3ce" class="bg-purple-600 h-2.5 rounded-full" style="width: 55%"></div>
+                    </div>
+                </div>
+                <div id="ccd0a987-de0d-4dae-a0ea-1d741dbe9687" class="bg-gray-900 p-4 rounded-lg mb-6">
+                    <div id="9ed14423-d9df-4db6-849f-4f4b2eba4c84" class="flex items-center justify-between mb-2">
+                        <span id="0c32e467-1882-4472-8f1f-7095475b36da" class="text-sm text-gray-400">CPU 2</span>
+                        <span id="700d28d0-22ff-4670-8c1f-20e48c75b617" class="text-sm text-gray-400">32 pages</span>
+                    </div>
+                    <div id="cb32c697-97a5-419a-91e3-f9a61cb964f4" class="w-full bg-gray-700 rounded-full h-2.5">
+                        <div id="73fe2d01-978a-441a-92df-5a7b59116a43" class="bg-teal-600 h-2.5 rounded-full" style="width: 95%"></div>
+                    </div>
+                </div>
+                <p id="c0188ef9-9de9-4ee8-b4eb-61634cbb5bcc" class="text-sm text-gray-400">为了优化频繁的页面分配，Linux内核实现了每CPU页帧缓存，它在每个CPU上缓存一定数量的页面，减少对伙伴系统的访问，提高分配效率。</p>
+            </div>
+
+            <!-- Memory Allocators -->
+            <div id="a3d96da0-0739-45fc-adfe-41c5ff085890" class="bento-item col-span-12 md:col-span-8 animate-on-scroll">
+                <h3 id="9cb61a84-b26a-41d7-a705-a27b3fce9f9d" class="text-2xl font-bold mb-4">内存分配器 <span class="text-sm text-gray-400">Memory Allocators</span></h3>
+                <div id="8f82cbc9-8858-4848-a22f-1cc14f026d56" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div id="77820ca5-d096-4cc4-8164-946434851e88" class="p-4 bg-gray-900 rounded-lg">
+                        <div id="7797d536-d287-4645-822c-800f9f1b46e8" class="text-center mb-3">
+                            <span id="dd9e18a6-2b80-4c41-81c4-73b9f358bb7a" class="gradient-text primary-gradient text-4xl font-bold">Slab</span>
+                        </div>
+                        <p id="d8354785-411e-4e09-a232-2ffe2431af49" class="text-sm text-gray-400 text-center">经典实现，按对象大小划分缓存</p>
+                    </div>
+                    <div id="1231b50b-a727-4394-bd07-ae9a64ef73f3" class="p-4 bg-gray-900 rounded-lg">
+                        <div id="2cbbfbb4-b156-4000-855d-af3f4918371d" class="text-center mb-3">
+                            <span id="2d72a39c-c3d1-4a7e-8476-36e1152b89d2" class="gradient-text secondary-gradient text-4xl font-bold">Slub</span>
+                        </div>
+                        <p id="c5d0912c-2324-45cd-8ec1-13a7db8e297d" class="text-sm text-gray-400 text-center">简化设计，优化多核性能</p>
+                    </div>
+                    <div id="d27d6104-42a1-4c55-8564-c9d70a7f248f" class="p-4 bg-gray-900 rounded-lg">
+                        <div id="e0f08879-b825-428f-9373-e18c5852e12b" class="text-center mb-3">
+                            <span id="f5a94571-74dc-4701-8aa3-8e60e98a94a9" class="gradient-text tertiary-gradient text-4xl font-bold">Slob</span>
+                        </div>
+                        <p id="44588432-b209-4a8c-960c-aa56ad2841f8" class="text-sm text-gray-400 text-center">适用于嵌入式系统的简化版本</p>
+                    </div>
+                </div>
+                <div id="84cce9e6-6f3a-4df7-8e25-f5a724dddcc9" class="code-block text-xs md:text-sm mb-4">
+                    <pre id="72296ba4-b0eb-4e1a-ac1b-da35fde35c0a"><code>void *kmalloc(size_t size, gfp_t flags)
+{
+    struct kmem_cache *cachep;
+    void *ret;
+    
+    /* 获取适合大小的缓存 */
+    cachep = kmalloc_caches[kmalloc_index(size)];
+    /* 从缓存分配内存 */
+    ret = kmem_cache_alloc_trace(cachep, flags, size);
+    return ret;
+}</code></pre>
+                </div>
+                <p id="902671b6-368c-46ec-a6b9-aba94a262801" class="text-sm text-gray-400">内存分配器在伙伴系统的基础上提供了更细粒度的内存分配，它们通过预分配和复用相似大小的对象来提高内存分配的效率。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Virtual Memory Management Section -->
+    <section id="virtual" class="py-20 px-4">
+        <div id="f26aece0-7dbf-4f43-91c4-dc8330ea5c6c" class="container mx-auto mb-16 animate-on-scroll">
+            <h2 id="f9d7959e-546a-421e-acf5-13ad49cc14ae" class="text-4xl md:text-5xl font-bold mb-4">虚拟内存管理 <span class="text-sm ml-2 text-gray-400">Virtual Memory</span></h2>
+            <div id="d22a4021-3fd6-42d5-a974-9bf96fa05a71" class="w-32 h-1 bg-blue-600 mb-8"></div>
+            <p id="b8ad5028-a6a5-4011-ab9d-d01215166201" class="text-xl text-gray-300">虚拟内存是现代操作系统的核心特性，它提供了进程间的内存隔离，以及比物理内存更大的地址空间。</p>
+        </div>
+
+        <div id="de6eadd6-5d47-47e2-8f70-03f621e1e199" class="bento-grid container mx-auto">
+            <!-- Page Table -->
+            <div id="fe75eb56-ce00-429d-988d-406ac3c30369" class="bento-item col-span-12 md:col-span-8 animate-on-scroll">
+                <h3 id="7f89133c-9ee2-46b2-82b3-e59a0cdd17aa" class="text-2xl font-bold mb-6">页表机制 <span class="text-sm text-gray-400">Page Table Mechanism</span></h3>
+                <div id="page-table-diagram" class="w-full h-[300px] mb-6"></div>
+                <div id="1e604e6c-df5b-4ee0-9446-81a0b8f64e97" class="code-block text-xs md:text-sm mb-4">
+                    <pre id="2a7fcc00-32be-47c2-a3cf-baee203262c3"><code>typedef struct { unsigned long pte; } pte_t;
+typedef struct { unsigned long pmd; } pmd_t;
+typedef struct { unsigned long pud; } pud_t;
+typedef struct { unsigned long pgd; } pgd_t;</code></pre>
+                </div>
+                <p id="de46633d-11ea-407f-ab41-0e791bb48824" class="text-sm text-gray-400">Linux使用多级页表来管理虚拟地址到物理地址的映射。在x86_64架构下，通常使用4级页表：PGD、PUD、PMD和PTE，每一级页表通过索引定位到下一级表。</p>
+            </div>
+
+            <!-- TLB Management -->
+            <div id="9972cb9f-6685-444b-ac2e-999a576373f2" class="bento-item col-span-12 md:col-span-4 animate-on-scroll">
+                <h3 id="08b023de-c6ed-467b-b59d-b05878afe820" class="text-2xl font-bold mb-4">TLB管理 <span class="text-sm text-gray-400">TLB Management</span></h3>
+                <div id="aef951f3-17c0-4b94-a6ab-28a12833c52a" class="flex flex-col space-y-4 mb-6">
+                    <div id="8051c01f-9539-475d-948c-3a9cbed32f35" class="relative overflow-hidden rounded-lg bg-gray-900 p-4">
+                        <span id="53a10212-b86b-4ecd-8601-094b002a45fe" class="gradient-text secondary-gradient mega-text block">TLB</span>
+                        <div id="760d7fe2-c5ac-40b7-bfe8-77d32dd2bc9d" class="absolute bottom-0 left-0 -mb-4 -ml-4 w-24 h-24 bg-purple-500 filter blur-2xl opacity-20 rounded-full"></div>
+                    </div>
+                </div>
+                <div id="bf0a02f3-dbb5-4fbc-b9a7-4b68c77e6188" class="code-block text-xs md:text-sm mb-4">
+                    <pre id="dd466c35-ac24-4569-9e9d-b855f211c287"><code>static inline void flush_tlb_single(unsigned long addr)
+{
+    /* 刷新单个TLB条目 */
+    __asm__ __volatile__("invlpg (%0)" ::"r" (addr) : "memory");
+}</code></pre>
+                </div>
+                <p id="1da05165-9a55-401a-b549-da5212dd3de1" class="text-sm text-gray-400">翻译后备缓冲区(TLB)是CPU中的一个硬件缓存，用于加速虚拟地址到物理地址的转换过程。当页表发生变化时，内核需要刷新TLB。</p>
+            </div>
+
+            <!-- Address Space Management -->
+            <div id="8093d0c6-0cef-4587-9690-6b46e709a8ca" class="bento-item col-span-12 animate-on-scroll">
+                <h3 id="427cef7e-3f02-4a35-a3c4-4babef578df2" class="text-2xl font-bold mb-6">地址空间管理 <span class="text-sm text-gray-400">Address Space Management</span></h3>
+                <div id="address-space-diagram" class="w-full h-[350px] mb-6"></div>
+                <div id="a9c92af2-7258-4d0e-ac85-8fe4fb47f1c3" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div id="20a832ba-5168-4b7a-a20e-dd5be064d45d" class="code-block text-xs md:text-sm">
+                        <pre id="013e7d42-f4bc-4bd6-8d35-253978163f94"><code>struct mm_struct {
+    struct vm_area_struct *mmap;        /* 虚拟内存区域链表 */
+    struct rb_root mm_rb;               /* 虚拟内存区域红黑树 */
+    pgd_t * pgd;                        /* 页全局目录 */
+    atomic_t mm_users;                  /* 用户计数 */
+    atomic_t mm_count;                  /* 引用计数 */
+    /* ... */
+};</code></pre>
+                    </div>
+                    <div id="8743fcda-11a1-47a1-a8da-c8967b2dd392" class="code-block text-xs md:text-sm">
+                        <pre id="5b2eafee-82ad-487c-b4c8-960ae8a4a41b"><code>struct vm_area_struct {
+    unsigned long vm_start;      /* 开始地址 */
+    unsigned long vm_end;        /* 结束地址 */
+    struct vm_area_struct *vm_next;  /* 链表下一个VMA */
+    struct rb_node vm_rb;       /* 红黑树节点 */
+    
+    pgprot_t vm_page_prot;      /* 访问权限 */
+    unsigned long vm_flags;      /* 标志 */
+    
+    struct mm_struct *vm_mm;     /* 所属mm_struct */
+    /* ... */
+};</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Memory Reclamation and Advanced Features Section -->
+    <section id="advanced" class="py-20 px-4 bg-gradient-to-b from-[#111827] to-[#0a0e17]">
+        <div id="4c68d7eb-b9c4-4fef-98e7-274f803172e1" class="container mx-auto mb-16 animate-on-scroll">
+            <h2 id="4b5dceee-2514-40ca-9389-66c05a599914" class="text-4xl md:text-5xl font-bold mb-4">高级特性 <span class="text-sm ml-2 text-gray-400">Advanced Features</span></h2>
+            <div id="bd9575bd-782d-42da-bb8c-8db35186c437" class="w-32 h-1 bg-blue-600 mb-8"></div>
+            <p id="a9e5ccf0-e5fd-4c07-84be-9014ac998d7b" class="text-xl text-gray-300">Linux内存管理子系统包含许多高级特性，用于提高性能和资源利用率。</p>
+        </div>
+
+        <div id="af69f5f9-86ac-4989-bfc1-ee86ac4d5448" class="bento-grid container mx-auto">
+            <!-- Page Reclamation -->
+            <div id="bc701c44-531e-4902-8ee0-939db4fb9f7d" class="bento-item col-span-12 md:col-span-6 lg:col-span-4 animate-on-scroll">
+                <h3 id="16bdfcbb-3793-4308-a533-7a8b2d9f70bc" class="text-2xl font-bold mb-6">页面回收 <span class="text-sm text-gray-400">Page Reclamation</span></h3>
+                <div id="page-reclamation-chart" class="w-full h-[200px] mb-6"></div>
+                <div id="3aa2f242-06de-4df1-afee-15ea60c5e339" class="space-y-4">
+                    <div id="ad223f0c-bfa2-44d3-b834-cbb476da5e36" class="flex items-start">
+                        <div id="ac8740b9-aeac-41ab-880e-224420e266e3" class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center mr-3 mt-1">
+                            <i id="ce5bee10-abf2-405c-b4e5-f74829a83508" class="fas fa-list-alt"></i>
+                        </div>
+                        <div id="12b717f0-ddcd-4bfb-8c3a-de634e8cf3de">
+                            <h4 id="6409ad47-b4e1-4270-baf8-b34f50ddc487" class="font-semibold">LRU算法</h4>
+                            <p id="c1a6a7e6-4a3c-4938-bcb2-345c3f67919a" class="text-sm text-gray-400">维护活跃和不活跃页面列表</p>
+                        </div>
+                    </li>
+                    <div id="e60577ff-c61e-4043-9186-5c831f88bc59" class="flex items-start">
+                        <div id="5066adff-c59a-409a-9e0f-9f0566813bd7" class="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center mr-3 mt-1">
+                            <i id="bd117fbc-b568-43f7-bb5f-6df7fcbc16ed" class="fas fa-sync"></i>
+                        </div>
+                        <div id="ef18d34c-23b3-496b-81b5-9cf717e5dbc8">
+                            <h4 id="cfb3c477-4090-4c40-9660-f9d3a472fa5d" class="font-semibold">页面回写</h4>
+                            <p id="0e022d48-2372-4d22-bab0-85021fb5bc8c" class="text-sm text-gray-400">将脏页写回磁盘</p>
+                        </div>
+                    </li>
+                    <div id="58d381e4-d93c-4e2c-a9ed-ac4717af6e2d" class="flex items-start">
+                        <div id="4e411947-50f7-489c-a322-e6c748b7c75a" class="flex-shrink-0 w-8 h-8 rounded-full bg-red-600 flex items-center justify-center mr-3 mt-1">
+                            <i id="d27c513f-97c3-47ce-b0ac-0c9aae0eae80" class="fas fa-skull"></i>
+                        </div>
+                        <div id="014ff56f-50f9-49c9-9dfd-613e563678f7">
+                            <h4 id="15cd3946-0846-4005-affa-00b90e62210f" class="font-semibold">OOM Killer</h4>
+                            <p id="9f92515e-de6d-414d-82d3-2517c770bc37" class="text-sm text-gray-400">内存严重不足时终止进程</p>
+                        </div>
+                    </li>
+                </div>
+            </div>
+
+            <!-- HugePages -->
+            <div id="ffa6814e-6e11-4a04-b8cf-f6013214b2f1" class="bento-item col-span-12 md:col-span-6 lg:col-span-4 animate-on-scroll">
+                <h3 id="525fc68d-79df-49a0-b17c-508269b56a96" class="text-2xl font-bold mb-4">大页 <span class="text-sm text-gray-400">Huge Pages</span></h3>
+                <div id="1781e083-5f0e-4a9e-92e5-62a38d761474" class="flex flex-col space-y-4 mb-6">
+                    <div id="dd922888-e966-44ef-87f9-f6c76beba2a0" class="relative overflow-hidden rounded-lg bg-gray-900 p-4">
+                        <span id="d4ed261e-ec07-42fd-a634-324d02235c52" class="gradient-text tertiary-gradient mega-text block">2 MB</span>
+                        <div id="5e941d88-fcfa-4bbc-900f-4a0fd659b0fe" class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-teal-500 filter blur-2xl opacity-20 rounded-full"></div>
+                    </div>
+                </div>
+                <div id="bc60838d-0a48-44a4-8181-61c4ca55a5ae" class="space-y-3">
+                    <div id="ceb52473-91de-481e-add5-01dae8ce6155" class="flex items-center">
+                        <div id="9f08a632-12c7-4552-8ce1-90d8a7e8a9f3" class="w-3 h-3 bg-blue-600 rounded-full mr-2"></div>
+                        <div id="1e4bcbc1-c0ed-4642-ac6e-dbdf65177a5f" class="font-medium">标准页</div>
+                        <div id="aeb3d596-ba99-421a-8c3d-ffbf0b934556" class="ml-auto text-sm text-gray-400">4KB</div>
+                    </div>
+                    <div id="4fe7f5e6-83a2-4a13-9c96-45bdb7e6eb6f" class="flex items-center">
+                        <div id="2845ce24-c0db-47b9-81dc-1dfa1eee02dc" class="w-3 h-3 bg-indigo-600 rounded-full mr-2"></div>
+                        <div id="829d3026-019a-4ede-ade6-017fbc892223" class="font-medium">中等大页</div>
+                        <div id="b431bb05-02e3-4171-a07e-37608ccaccd5" class="ml-auto text-sm text-gray-400">2MB</div>
+                    </div>
+                    <div id="f0f376c7-e510-422e-b140-6dc0da0423a0" class="flex items-center">
+                        <div id="0af176c4-979e-4246-b8c9-f520ad368337" class="w-3 h-3 bg-purple-600 rounded-full mr-2"></div>
+                        <div id="e4823f27-c441-4f27-aded-2387cb222f95" class="font-medium">超大页</div>
+                        <div id="f0d5e2cb-99bb-4f7a-984a-e891071f55c0" class="ml-auto text-sm text-gray-400">1GB</div>
+                    </div>
+                </div>
+                <p id="8a2b6188-bf63-4db0-af93-0878d853e76a" class="mt-6 text-sm text-gray-400">大页通过减少页表项数量，提高TLB命中率，显著提升内存密集型应用程序的性能。</p>
+            </div>
+
+            <!-- NUMA Management -->
+            <div id="a17178a3-52df-4850-a98d-94266a82246c" class="bento-item col-span-12 md:col-span-6 lg:col-span-4 animate-on-scroll">
+                <h3 id="bffa8f34-1297-4f5b-8ce4-2afe918e81ac" class="text-2xl font-bold mb-6">NUMA管理 <span class="text-sm text-gray-400">NUMA Management</span></h3>
+                <div id="numa-diagram" class="w-full h-[200px] mb-6"></div>
+                <p id="dd57a276-6a8e-47a3-9c78-61b85f5a09e5" class="text-sm text-gray-400">在NUMA（非统一内存访问）架构上，Linux内核考虑内存访问的局部性，尽量让进程使用与其运行CPU相近的内存节点，减少跨节点访问带来的延迟。</p>
+                <div id="6850cb19-c18c-4fec-83f4-4c24990e9c43" class="code-block text-xs md:text-sm mt-4">
+                    <pre id="562c80d9-820a-413a-b333-948b27a1dbc1"><code>int do_migrate_pages(struct mm_struct *mm, 
+                const nodemask_t *from,
+                const nodemask_t *to, int flags)
+{
+    /* 在NUMA节点之间迁移页面 */
+}</code></pre>
+                </div>
+            </div>
+
+            <!-- System Calls -->
+            <div id="804547a2-18c7-4677-984c-cd484e2de920" class="bento-item col-span-12 animate-on-scroll">
+                <h3 id="0989672e-6aaa-4047-8b0c-0b4d75d72569" class="text-2xl font-bold mb-6">内存管理系统调用 <span class="text-sm text-gray-400">System Calls</span></h3>
+                <div id="876ef3a3-16b1-4d2e-bb7d-4d5a2252c285" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div id="66fbe8e1-5e26-479c-841a-9b989e6c47a0" class="p-4 bg-gray-900 rounded-lg">
+                        <div id="a1935eff-5630-4243-840e-f71e67758303" class="flex items-center mb-3">
+                            <div id="0c1ef701-9ab9-4e7d-bb1c-5dfe0a7acbeb" class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center mr-3">
+                                <i id="adec6962-11e1-4979-9c1a-f21b2bc70bf7" class="fas fa-map"></i>
+                            </div>
+                            <h4 id="98bdb54f-f853-4286-a765-6a4eb1b6a313" class="text-lg font-semibold">mmap</h4>
+                        </div>
+                        <p id="f76a6bcb-5516-429f-b80f-ffd3a68ac09c" class="text-sm text-gray-400">创建内存映射，将文件或设备映射到进程地址空间。</p>
+                    </div>
+                    <div id="ec8bc618-2ec4-4cc1-a2a1-7339507cd0e7" class="p-4 bg-gray-900 rounded-lg">
+                        <div id="00fcff67-0822-4297-9b34-50473f3cf253" class="flex items-center mb-3">
+                            <div id="ba71e791-c493-4ad4-81f8-bd11e1081b20" class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center mr-3">
+                                <i id="ba292c3e-2b27-4f42-b38d-fc2ccd5c3d40" class="fas fa-expand-arrows-alt"></i>
+                            </div>
+                            <h4 id="4fd80dcb-9291-4b2c-baef-c28de3a6acbe" class="text-lg font-semibold">brk</h4>
+                        </div>
+                        <p id="b911b8fa-88e5-4e9f-b305-75681841fd1e" class="text-sm text-gray-400">调整进程的堆空间，用于动态内存分配。</p>
+                    </div>
+                    <div id="99187bfc-4a43-43d5-97f5-dc520ec601c2" class="p-4 bg-gray-900 rounded-lg">
+                        <div id="67dd5e5c-c377-4f92-a4e9-07472be8e1a5" class="flex items-center mb-3">
+                            <div id="ed36828b-79a8-4316-8a25-b4567fe14a6d" class="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center mr-3">
+                                <i id="bdbbc929-c46b-48d9-8a98-59084e324965" class="fas fa-lock"></i>
+                            </div>
+                            <h4 id="737bc0f7-7992-4762-aa0e-aa15dfb9c97f" class="text-lg font-semibold">mlock</h4>
+                        </div>
+                        <p id="01e3c449-b2e4-48bf-bb84-66507e9c787c" class="text-sm text-gray-400">锁定进程地址空间中的页面，防止其被交换出内存。</p>
+                    </div>
+                    <div id="c5a7a961-cf6e-4a11-87ca-02c398362b18" class="p-4 bg-gray-900 rounded-lg">
+                        <div id="b7bd2a43-4983-4c03-a984-ac9f55583327" class="flex items-center mb-3">
+                            <div id="031f2337-70b8-46d3-ba1b-a9fe203b6371" class="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center mr-3">
+                                <i id="c5c6f9ca-a580-4c16-8151-d1fb8dce6280" class="fas fa-tasks"></i>
+                            </div>
+                            <h4 id="1e7c27d2-47c8-49c9-96dc-ca39126a535f" class="text-lg font-semibold">madvise</h4>
+                        </div>
+                        <p id="ed15c0d4-72ef-4d63-b209-88a83cc9e4fe" class="text-sm text-gray-400">向内核提供关于内存区域使用模式的建议。</p>
+                    </div>
+                </div>
+                <div id="82db3dd5-0261-492b-a8c2-0bed2598f3ca" class="mt-6">
+                    <h4 id="18c43901-1ec7-41db-8464-49cecad37c60" class="font-semibold mb-3">内存管理相关系统调用代码示例：</h4>
+                    <div id="e16f8a3e-9626-43ce-aee3-9602496eea5e" class="code-block text-xs md:text-sm">
+                        <pre id="6800d87a-5d0e-4172-8bea-33d82fb170e3"><code>SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
+                unsigned long, prot, unsigned long, flags,
+                unsigned long, fd, unsigned long, off)
+{
+    /* ... */
+    return ksys_mmap_pgoff(addr, len, prot, flags, fd, off >> PAGE_SHIFT);
+    /* ... */
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Summary Section -->
+    <section id="summary" class="py-20 px-4">
+        <div id="fb82be0e-4ac1-4079-b13b-c5fc5e4ba5bd" class="container mx-auto animate-on-scroll">
+            <h2 id="a4d79848-f37e-49cf-a23e-1e0e4479155a" class="text-4xl md:text-5xl font-bold mb-4">总结 <span class="text-sm ml-2 text-gray-400">Summary</span></h2>
+            <div id="09750a10-a952-4c54-9bb0-8dc8f8617d2f" class="w-32 h-1 bg-blue-600 mb-8"></div>
+            <div id="7539af58-175d-4025-b824-adcafecf6997" class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                <div id="4fbd84d2-9d34-4990-99f8-9939a219bfc0">
+                    <p id="fa72a0de-90ee-44b5-a2f7-dd73cacfce7c" class="text-xl text-gray-300 mb-6">Linux内存管理子系统是一个复杂而精密的机制，通过多层次的抽象和优化，高效地管理系统内存资源。它的设计要点包括：</p>
+                    <ul id="fdfb3bc4-5c71-4f55-a87b-98cbfa6bedd9" class="space-y-3">
+                        <li id="452418c3-9181-4096-8735-cec6b6565360" class="flex items-start">
+                            <div id="9cec6809-5d2a-4960-88e5-e170cf4e99df" class="flex-shrink-0 w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center mr-3 mt-1">
+                                <span id="e563676f-a3ad-490a-b842-13f46102bed1" class="text-xs">1</span>
+                            </div>
+                            <p id="6144bd77-b5a5-44c1-a067-ef985f7231bb" class="text-gray-300"><strong>物理内存管理</strong>：伙伴系统提供了高效的页面分配</p>
+                        </li>
+                        <li id="34c7fa1e-1211-49f6-939e-96ffcea61865" class="flex items-start">
+                            <div id="2a907fb7-8885-46ac-b581-eea6927ead41" class="flex-shrink-0 w-5 h-5 rounded-full bg-purple-600 flex items-center justify-center mr-3 mt-1">
+                                <span id="aa7f9a34-6673-4035-8176-95b6c92399d0" class="text-xs">2</span>
+                            </div>
+                            <p id="97215701-4aa3-4519-a85c-e9bb7a7eb328" class="text-gray-300"><strong>内存分配器</strong>：Slab/Slub/Slob提供了细粒度的内存分配</p>
+                        </li>
+                        <li id="b5b5e235-7ec4-4764-a0c2-0079f4f9a8a3" class="flex items-start">
+                            <div id="e36a3fc1-7326-4d66-b45c-6919348607c0" class="flex-shrink-0 w-5 h-5 rounded-full bg-teal-600 flex items-center justify-center mr-3 mt-1">
+                                <span id="f5eed231-6499-4ce7-a343-418c496cb526" class="text-xs">3</span>
+                            </div>
+                            <p id="5c32c023-86e9-494a-aa77-2bcb441b0493" class="text-gray-300"><strong>虚拟内存管理</strong>：多级页表和TLB优化了地址转换</p>
+                        </li>
+                        <li id="4a2e85a5-6ef5-473c-b98a-4c7496de33bc" class="flex items-start">
+                            <div id="ef770c4c-22f6-47ee-8323-d4f6e94f9b12" class="flex-shrink-0 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center mr-3 mt-1">
+                                <span id="3eba1560-0d22-47ea-bbcb-c3d9c11b2ff1" class="text-xs">4</span>
+                            </div>
+                            <p id="7e2c9ed7-3901-4580-bfdb-a4728f5fea5d" class="text-gray-300"><strong>页面回收</strong>：LRU算法和OOM Killer保证了内存紧张时的系统稳定性</p>
+                        </li>
+                        <li id="660473f8-6074-4071-af12-e387927820c2" class="flex items-start">
+                            <div id="4694223c-bcdc-4aba-b3df-71f3e8b7ce96" class="flex-shrink-0 w-5 h-5 rounded-full bg-yellow-600 flex items-center justify-center mr-3 mt-1">
+                                <span id="fa57ca71-c214-489e-a900-13ac5673c196" class="text-xs">5</span>
+                            </div>
+                            <p id="9bd6b958-633a-4e35-a49c-11802d916653" class="text-gray-300"><strong>高级特性</strong>：大页和NUMA支持提供了针对特定场景的性能优化</p>
+                        </li>
+                    </ul>
+                </div>
+                <div id="53ff8624-4999-4fe2-9e9e-8e31f8e0406e" class="relative">
+                    <div id="c809f9c7-5cf7-46e1-b347-a2296881b652" class="absolute top-0 right-0 -mr-8 -mt-8 w-64 h-64 bg-blue-500 rounded-full filter blur-3xl opacity-10"></div>
+                    <div id="24b4de63-7b68-4b83-88df-fb051a214d79" class="absolute bottom-0 left-0 -ml-8 -mb-8 w-64 h-64 bg-purple-500 rounded-full filter blur-3xl opacity-10"></div>
+                    <div id="summary-chart" class="w-full h-[400px] relative z-10"></div>
+                </div>
+            </div>
+            <div id="66c57d15-524a-424a-bfa8-3d80c09f0f6b" class="mt-12 text-center">
+                <p id="565c977d-0ca9-471c-869b-722f7d5e11c2" class="text-xl text-gray-300">通过深入理解内存管理子系统的源码实现，我们可以更好地优化系统性能，开发高效的应用程序和内核模块。</p>
+                <a id="844c5e90-488a-4d7d-bfb2-e8b44aee041e" href="https://github.com/torvalds/linux/tree/master/mm" target="_blank" class="inline-flex items-center mt-6 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all">
+                    <i id="ff0cf374-fc66-458e-8ddd-55bda51be873" class="fab fa-github mr-2"></i>探索Linux内存管理源码
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="6adaa5ed-c448-4985-b4cd-f3f66dfc99bd" class="bg-gray-900 py-10 px-4">
+        <div id="fbf903a2-fd3b-4b09-9e57-6bb2242cc0cb" class="container mx-auto text-center">
+            <p id="c1ab8fc8-3189-4354-b0c2-724e9054ac09" class="text-gray-400">© 2025 Linux内存管理子系统详解 | 使用TailwindCSS和Framer Motion构建</p>
+            <div id="93e5d429-3271-4264-a093-769999c16bb4" class="flex justify-center space-x-6 mt-6">
+                <a id="f758bac2-afd7-4312-9fa0-24974cedc588" href="https://www.kernel.org/" target="_blank" class="text-gray-400 hover:text-white transition-colors">
+                    <i id="e1e070ad-5a94-44ac-87e1-c61f3456f935" class="fab fa-linux text-xl"></i>
+                </a>
+                <a id="5e21dafd-3825-44d6-87f9-761c7ace27a9" href="https://github.com/torvalds/linux" target="_blank" class="text-gray-400 hover:text-white transition-colors">
+                    <i id="e25c9058-ccf5-4270-a023-5a75003ea2f7" class="fab fa-github text-xl"></i>
+                </a>
+                <a id="9e721d19-06eb-420e-bf2c-2c1d30e321aa" href="https://www.kernel.org/doc/html/latest/admin-guide/mm/index.html" target="_blank" class="text-gray-400 hover:text-white transition-colors">
+                    <i id="050ee69e-99a3-4ddf-9c2a-20a538399b1a" class="fas fa-book text-xl"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialization when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize ECharts visualizations
+            initMemoryManagementDiagram();
+            initMemoryArchitectureChart();
+            initBuddySystemChart();
+            initPageTableDiagram();
+            initAddressSpaceDiagram();
+            initPageReclamationChart();
+            initNumaDiagram();
+            initSummaryChart();
+            
+            // Animation for elements when scrolling
+            const animateOnScroll = () => {
+                const elements = document.querySelectorAll('.animate-on-scroll');
+                const windowHeight = window.innerHeight;
+                
+                elements.forEach((element) => {
+                    const elementPosition = element.getBoundingClientRect().top;
+                    if (elementPosition < windowHeight - 100) {
+                        element.classList.add('animated');
+                    }
+                });
+            };
+            
+            // Initial animation for elements in viewport
+            animateOnScroll();
+            window.addEventListener('scroll', animateOnScroll);
+            
+            // Make initial animation containers visible
+            setTimeout(() => {
+                document.querySelectorAll('.animation-container').forEach(el => {
+                    el.classList.add('visible');
+                });
+            }, 300);
+            
+            // Mobile menu toggle
+            const menuButton = document.getElementById('dffd76e0-b9dd-47d9-91fe-1aa1d83de25a');
+            if (menuButton) {
+                menuButton.addEventListener('click', function() {
+                    const mobileNav = document.createElement('div');
+                    mobileNav.className = 'fixed inset-0 bg-primary z-50 flex flex-col items-center justify-center';
+                    mobileNav.innerHTML = `
+                        <button class="absolute top-4 right-4 text-white text-2xl">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <div class="flex flex-col items-center space-y-8">
+                            <a href="#architecture" class="text-xl text-white">架构概览</a>
+                            <a href="#physical" class="text-xl text-white">物理内存</a>
+                            <a href="#virtual" class="text-xl text-white">虚拟内存</a>
+                            <a href="#advanced" class="text-xl text-white">高级特性</a>
+                        </div>
+                    `;
+                    document.body.appendChild(mobileNav);
+                    
+                    // Close button
+                    mobileNav.querySelector('button').addEventListener('click', function() {
+                        document.body.removeChild(mobileNav);
+                    });
+                    
+                    // Navigation links
+                    mobileNav.querySelectorAll('a').forEach(link => {
+                        link.addEventListener('click', function() {
+                            document.body.removeChild(mobileNav);
+                        });
+                    });
+                });
+            }
+        });
+        
+        // Memory Management Overview Diagram
+        function initMemoryManagementDiagram() {
+            const chart = echarts.init(document.getElementById('memory-management-diagram'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    data: [{
+                        name: '内存管理子系统',
+                        value: 50,
+                        symbolSize: 70,
+                        itemStyle: {color: '#3182ce'}
+                    }, {
+                        name: '物理内存管理',
+                        value: 30,
+                        symbolSize: 50,
+                        itemStyle: {color: '#805ad5'}
+                    }, {
+                        name: '虚拟内存管理',
+                        value: 30,
+                        symbolSize: 50,
+                        itemStyle: {color: '#38b2ac'}
+                    }, {
+                        name: '内存分配器',
+                        value: 20,
+                        symbolSize: 40,
+                        itemStyle: {color: '#dd6b20'}
+                    }, {
+                        name: '页面回收',
+                        value: 20,
+                        symbolSize: 40,
+                        itemStyle: {color: '#d53f8c'}
+                    }],
+                    links: [{
+                        source: '内存管理子系统',
+                        target: '物理内存管理',
+                        lineStyle: {width: 3, color: '#3182ce'}
+                    }, {
+                        source: '内存管理子系统',
+                        target: '虚拟内存管理',
+                        lineStyle: {width: 3, color: '#3182ce'}
+                    }, {
+                        source: '内存管理子系统',
+                        target: '内存分配器',
+                        lineStyle: {width: 3, color: '#3182ce'}
+                    }, {
+                        source: '内存管理子系统',
+                        target: '页面回收',
+                        lineStyle: {width: 3, color: '#3182ce'}
+                    }],
+                    force: {
+                        repulsion: 300,
+                        edgeLength: 120
+                    },
+                    label: {
+                        show: true,
+                        color: '#e2e8f0',
+                        fontSize: 12
+                    },
+                    lineStyle: {
+                        opacity: 0.9,
+                        width: 2,
+                        curveness: 0
+                    },
+                    emphasis: {
+                        lineStyle: {
+                            width: 4
+                        }
+                    }
+                }]
+            };
+            
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        // Memory Architecture Chart
+        function initMemoryArchitectureChart() {
+            const chart = echarts.init(document.getElementById('memory-architecture-chart'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c}'
+                },
+                legend: {
+                    data: ['物理内存管理', '虚拟内存管理', '内存分配器', '页面回收', '系统调用'],
+                    textStyle: {color: '#e2e8f0'},
+                    top: 'bottom'
+                },
+                series: [
+                    {
+                        name: '架构',
+                        type: 'sankey',
+                        left: 50,
+                        top: 20,
+                        right: 150,
+                        bottom: 25,
+                        data: [
+                            {name: '内存管理子系统'},
+                            {name: '物理内存管理'},
+                            {name: '虚拟内存管理'},
+                            {name: '内存分配器'},
+                            {name: '页面回收'},
+                            {name: '系统调用'},
+                            {name: '伙伴系统'},
+                            {name: '页帧缓存'},
+                            {name: '内存区域'},
+                            {name: '页表机制'},
+                            {name: 'TLB管理'},
+                            {name: '地址空间'},
+                            {name: 'Slab/Slub'},
+                            {name: 'kmalloc'},
+                            {name: 'LRU算法'},
+                            {name: 'OOM Killer'}
+                        ],
+                        links: [
+                            {source: '内存管理子系统', target: '物理内存管理', value: 5},
+                            {source: '内存管理子系统', target: '虚拟内存管理', value: 5},
+                            {source: '内存管理子系统', target: '内存分配器', value: 3},
+                            {source: '内存管理子系统', target: '页面回收', value: 3},
+                            {source: '内存管理子系统', target: '系统调用', value: 2},
+                            {source: '物理内存管理', target: '伙伴系统', value: 3},
+                            {source: '物理内存管理', target: '页帧缓存', value: 2},
+                            {source: '物理内存管理', target: '内存区域', value: 2},
+                            {source: '虚拟内存管理', target: '页表机制', value: 3},
+                            {source: '虚拟内存管理', target: 'TLB管理', value: 2},
+                            {source: '虚拟内存管理', target: '地址空间', value: 2},
+                            {source: '内存分配器', target: 'Slab/Slub', value: 2},
+                            {source: '内存分配器', target: 'kmalloc', value: 2},
+                            {source: '页面回收', target: 'LRU算法', value: 2},
+                            {source: '页面回收', target: 'OOM Killer', value: 1}
+                        ],
+                        lineStyle: {
+                            color: 'source',
+                            curveness: 0.5
+                        },
+                        itemStyle: {
+                            color: function(params) {
+                                const colors = {
+                                    '内存管理子系统': '#3182ce',
+                                    '物理内存管理': '#805ad5',
+                                    '虚拟内存管理': '#38b2ac',
+                                    '内存分配器': '#dd6b20',
+                                    '页面回收': '#d53f8c',
+                                    '系统调用': '#ecc94b'
+                                };
+                                return colors[params.name] || '#718096';
+                            }
+                        },
+                        label: {
+                            color: '#e2e8f0'
+                        }
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        // Buddy System Chart
+        function initBuddySystemChart() {
+            const chart = echarts.init(document.getElementById('buddy-system-chart'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '10%',
+                    top: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['Order 0', 'Order 1', 'Order 2', 'Order 3', 'Order 4', 'Order 5'],
+                    axisLine: {
+                        lineStyle: {
+                            color: '#718096'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#a0aec0',
+                        fontSize: 10
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '可用页块数',
+                    nameTextStyle: {
+                        color: '#a0aec0'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#718096'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#a0aec0'
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: 'rgba(113, 128, 150, 0.2)'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: '分配前',
+                        type: 'bar',
+                        data: [120, 80, 40, 20, 10, 5],
+                        itemStyle: {
+                            color: '#3182ce'
+                        },
+                        emphasis: {
+                            itemStyle: {
+                                color: '#4299e1'
+                            }
+                        },
+                        animationDelay: function (idx) {
+                            return idx * 100;
+                        }
+                    },
+                    {
+                        name: '分配后',
+                        type: 'bar',
+                        data: [80, 50, 30, 15, 8, 4],
+                        itemStyle: {
+                            color: '#805ad5'
+                        },
+                        emphasis: {
+                            itemStyle: {
+                                color: '#9f7aea'
+                            }
+                        },
+                        animationDelay: function (idx) {
+                            return idx * 100 + 300;
+                        }
+                    }
+                ],
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    },
+                    backgroundColor: 'rgba(23, 30, 46, 0.9)',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    textStyle: {
+                        color: '#e2e8f0'
+                    }
+                },
+                legend: {
+                    data: ['分配前', '分配后'],
+                    textStyle: {
+                        color: '#a0aec0'
+                    },
+                    bottom: -5
+                },
+                animationEasing: 'elasticOut',
+                animationDelayUpdate: function (idx) {
+                    return idx * 5;
+                }
+            };
+            
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        // Page Table Diagram
+        function initPageTableDiagram() {
+            const chart = echarts.init(document.getElementById('page-table-diagram'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    formatter: '{b}',
+                    backgroundColor: 'rgba(23, 30, 46, 0.9)',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    textStyle: {
+                        color: '#e2e8f0'
+                    }
+                },
+                series: [
+                    {
+                        type: 'graph',
+                        layout: 'none',
+                        symbolSize: 50,
+                        roam: false,
+                        label: {
+                            show: true,
+                            color: '#e2e8f0'
+                        },
+                        edgeSymbol: ['none', 'arrow'],
+                        edgeSymbolSize: 8,
+                        edgeLabel: {
+                            fontSize: 12
+                        },
+                        data: [
+                            {
+                                name: '虚拟地址',
+                                x: 100,
+                                y: 150,
+                                symbolSize: 60,
+                                itemStyle: {color: '#3182ce'}
+                            },
+                            {
+                                name: 'PGD',
+                                x: 250,
+                                y: 150,
+                                symbolSize: 40,
+                                itemStyle: {color: '#805ad5'}
+                            },
+                            {
+                                name: 'PUD',
+                                x: 400,
+                                y: 150,
+                                symbolSize: 40,
+                                itemStyle: {color: '#38b2ac'}
+                            },
+                            {
+                                name: 'PMD',
+                                x: 550,
+                                y: 150,
+                                symbolSize: 40,
+                                itemStyle: {color: '#d53f8c'}
+                            },
+                            {
+                                name: 'PTE',
+                                x: 700,
+                                y: 150,
+                                symbolSize: 40,
+                                itemStyle: {color: '#dd6b20'}
+                            },
+                            {
+                                name: '物理页帧',
+                                x: 850,
+                                y: 150,
+                                symbolSize: 60,
+                                itemStyle: {color: '#ecc94b'}
+                            }
+                        ],
+                        links: [
+                            {
+                                source: '虚拟地址',
+                                target: 'PGD',
+                                lineStyle: {width: 3, color: '#3182ce', curveness: 0}
+                            },
+                            {
+                                source: 'PGD',
+                                target: 'PUD',
+                                lineStyle: {width: 3, color: '#805ad5', curveness: 0}
+                            },
+                            {
+                                source: 'PUD',
+                                target: 'PMD',
+                                lineStyle: {width: 3, color: '#38b2ac', curveness: 0}
+                            },
+                            {
+                                source: 'PMD',
+                                target: 'PTE',
+                                lineStyle: {width: 3, color: '#d53f8c', curveness: 0}
+                            },
+                            {
+                                source: 'PTE',
+                                target: '物理页帧',
+                                lineStyle: {width: 3, color: '#dd6b20', curveness: 0}
+                            }
+                        ],
+                        lineStyle: {
+                            opacity: 0.9,
+                            width: 2,
+                            curveness: 0
+                        }
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        // Address Space Diagram
+        function initAddressSpaceDiagram() {
+            const chart = echarts.init(document.getElementById('address-space-diagram'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} MB',
+                    backgroundColor: 'rgba(23, 30, 46, 0.9)',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    textStyle: {
+                        color: '#e2e8f0'
+                    }
+                },
+                series: [
+                    {
+                        name: '进程地址空间',
+                        type: 'treemap',
+                        visibleMin: 300,
+                        data: [
+                            {
+                                name: '代码段',
+                                value: 1024,
+                                itemStyle: {color: '#3182ce'}
+                            },
+                            {
+                                name: '数据段',
+                                value: 2048,
+                                itemStyle: {color: '#805ad5'}
+                            },
+                            {
+                                name: '堆',
+                                value: 4096,
+                                itemStyle: {color: '#38b2ac'}
+                            },
+                            {
+                                name: '栈',
+                                value: 1536,
+                                itemStyle: {color: '#d53f8c'}
+                            },
+                            {
+                                name: '内存映射区',
+                                value: 3072,
+                                itemStyle: {color: '#dd6b20'}
+                            },
+                            {
+                                name: '共享库',
+                                value: 2560,
+                                itemStyle: {color: '#ecc94b'}
+                            }
+                        ],
+                        breadcrumb: {
+                            show: false
+                        },
+                        label: {
+                            show: true,
+                            formatter: '{b}',
+                            color: '#e2e8f0'
+                        },
+                        upperLabel: {
+                            show: true,
+                            height: 30,
+                            color: '#e2e8f0'
+                        },
+                        itemStyle: {
+                            borderColor: '#171e2e',
+                            borderWidth: 2
+                        },
+                        levels: [
+                            {
+                                itemStyle: {
+                                    borderColor: '#171e2e',
+                                    borderWidth: 2,
+                                    gapWidth: 2
+                                }
+                            }
+                        ]
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        // Page Reclamation Chart
+        function initPageReclamationChart() {
+            const chart = echarts.init(document.getElementById('page-reclamation-chart'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(23, 30, 46, 0.9)',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    textStyle: {
+                        color: '#e2e8f0'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '8%',
+                    top: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['0', '25', '50', '75', '100'],
+                    axisLine: {
+                        lineStyle: {
+                            color: '#718096'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#a0aec0'
+                    },
+                    name: '内存使用率(%)',
+                    nameLocation: 'middle',
+                    nameGap: 25,
+                    nameTextStyle: {
+                        color: '#a0aec0'
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '回收强度',
+                    nameTextStyle: {
+                        color: '#a0aec0'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#718096'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#a0aec0'
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: 'rgba(113, 128, 150, 0.2)'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: '页面回收',
+                        type: 'line',
+                        data: [0, 10, 25, 55, 100],
+                        itemStyle: {
+                            color: '#3182ce'
+                        },
+                        lineStyle: {
+                            width: 4,
+                            shadowColor: 'rgba(49, 130, 206, 0.5)',
+                            shadowBlur: 10
+                        },
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 8,
+                        markPoint: {
+                            data: [
+                                {type: 'max', name: 'OOM Killer'}
+                            ],
+                            label: {
+                                color: '#e2e8f0'
+                            }
+                        },
+                        markArea: {
+                            itemStyle: {
+                                color: 'rgba(213, 63, 140, 0.2)'
+                            },
+                            data: [
+                                [{
+                                    xAxis: '75'
+                                }, {
+                                    xAxis: '100'
+                                }]
+                            ]
+                        }
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        // NUMA Diagram
+        function initNumaDiagram() {
+            const chart = echarts.init(document.getElementById('numa-diagram'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    formatter: '{b}',
+                    backgroundColor: 'rgba(23, 30, 46, 0.9)',
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    textStyle: {
+                        color: '#e2e8f0'
+                    }
+                },
+                series: [
+                    {
+                        type: 'graph',
+                        layout: 'none',
+                        symbolSize: 50,
+                        roam: false,
+                        label: {
+                            show: true,
+                            color: '#e2e8f0'
+                        },
+                        edgeSymbol: ['none', 'arrow'],
+                        edgeSymbolSize: 8,
+                        edgeLabel: {
+                            fontSize: 12
+                        },
+                        data: [
+                            {
+                                name: 'CPU 0',
+                                x: 150,
+                                y: 100,
+                                symbolSize: 50,
+                                itemStyle: {color: '#3182ce'}
+                            },
+                            {
+                                name: 'CPU 1',
+                                x: 350,
+                                y: 100,
+                                symbolSize: 50,
+                                itemStyle: {color: '#3182ce'}
+                            },
+                            {
+                                name: '内存节点 0',
+                                x: 150,
+                                y: 200,
+                                symbolSize: 60,
+                                itemStyle: {color: '#805ad5'}
+                            },
+                            {
+                                name: '内存节点 1',
+                                x: 350,
+                                y: 200,
+                                symbolSize: 60,
+                                itemStyle: {color: '#805ad5'}
+                            }
+                        ],
+                        links: [
+                            {
+                                source: 'CPU 0',
+                                target: '内存节点 0',
+                                lineStyle: {width: 5, color: '#3182ce', type: 'solid', curveness: 0}
+                            },
+                            {
+                                source: 'CPU 0',
+                                target: '内存节点 1',
+                                lineStyle: {width: 2, color: '#3182ce', type: 'dashed', curveness: 0.2}
+                            },
+                            {
+                                source: 'CPU 1',
+                                target: '内存节点 1',
+                                lineStyle: {width: 5, color: '#805ad5', type: 'solid', curveness: 0}
+                            },
+                            {
+                                source: 'CPU 1',
+                                target: '内存节点 0',
+                                lineStyle: {width: 2, color: '#805ad5', type: 'dashed', curveness: 0.2}
+                            }
+                        ],
+                        lineStyle: {
+                            opacity: 0.9,
+                            width: 2,
+                            curveness: 0
+                        }
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        // Summary Chart
+        function initSummaryChart() {
+            const chart = echarts.init(document.getElementById('summary-chart'));
+            
+            const option = {
+                backgroundColor: 'transparent',
+                radar: {
+                    indicator: [
+                        {name: '物理内存管理', max: 100},
+                        {name: '虚拟内存管理', max: 100},
+                        {name: '内存分配器', max: 100},
+                        {name: '页面回收', max: 100},
+                        {name: '高级特性', max: 100}
+                    ],
+                    splitArea: {
+                        areaStyle: {
+                            color: ['rgba(255, 255, 255, 0.03)', 'rgba(255, 255, 255, 0.05)', 
+                                   'rgba(255, 255, 255, 0.07)', 'rgba(255, 255, 255, 0.09)'],
+                            shadowColor: 'rgba(0, 0, 0, 0.2)',
+                            shadowBlur: 10
+                        }
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    },
+                    name: {
+                        textStyle: {
+                            color: '#a0aec0'
+                        }
+                    }
+                },
+                series: [{
+                    name: 'Linux内存管理',
+                    type: 'radar',
+                    data: [
+                        {
+                            value: [95, 90, 85, 80, 85],
+                            name: '复杂度',
+                            areaStyle: {
+                                color: new echarts.graphic.RadialGradient(0.5, 0.5, 1, [
+                                    {
+                                        color: 'rgba(49, 130, 206, 0.9)',
+                                        offset: 0
+                                    },
+                                    {
+                                        color: 'rgba(128, 90, 213, 0)',
+                                        offset: 1
+                                    }
+                                ])
+                            },
+                            symbolSize: 6,
+                            lineStyle: {
+                                width: 3
+                            },
+                            itemStyle: {
+                                color: '#3182ce'
+                            }
+                        },
+                        {
+                            value: [90, 85, 95, 90, 80],
+                            name: '优化程度',
+                            areaStyle: {
+                                color: new echarts.graphic.RadialGradient(0.5, 0.5, 1, [
+                                    {
+                                        color: 'rgba(128, 90, 213, 0.9)',
+                                        offset: 0
+                                    },
+                                    {
+                                        color: 'rgba(56, 178, 172, 0)',
+                                        offset: 1
+                                    }
+                                ])
+                            },
+                            symbolSize: 6,
+                            lineStyle: {
+                                width: 3
+                            },
+                            itemStyle: {
+                                color: '#805ad5'
+                            }
+                        }
+                    ]
+                }],
+                legend: {
+                    data: ['复杂度', '优化程度'],
+                    textStyle: {
+                        color: '#a0aec0'
+                    },
+                    bottom: 0
+                }
+            };
+            
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+    </script>
+</body>
+
+</html>
