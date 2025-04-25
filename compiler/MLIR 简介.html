@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLVM：现代编译器基础架构</title>
+  <!-- TailwindCSS -->
+  <link href="https://fastly.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.css" rel="stylesheet">
+  <!-- Framer Motion -->
+  <script src="https://fastly.jsdelivr.net/npm/framer-motion@10.12.16/dist/framer-motion.js"></script>
+  <!-- Font Awesome -->
+  <link href="https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <!-- Prism.js for code highlighting -->
+  <link href="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/components/prism-llvm.min.js"></script>
+  <!-- Chart.js -->
+  <script src="https://fastly.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+    
+    :root {
+      --primary: #006aff;
+      --secondary: #00c2ff;
+      --accent: #fb5607;
+      --dark: #1a1a2e;
+      --light: #ffffff;
+      --background: #f8f9fa;
+    }
+    
+    html {
+      scroll-behavior: smooth;
+    }
+    
+    body {
+      font-family: 'Inter', 'Noto Sans SC', sans-serif;
+      background-color: var(--background);
+      color: var(--dark);
+    }
+    
+    .gradient-bg {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+    }
+    
+    .gradient-text {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .accent-gradient {
+      background: linear-gradient(135deg, var(--accent) 0%, #ffbe0b 100%);
+    }
+
+    .hero-number {
+      font-size: 12rem;
+      line-height: 1;
+      opacity: 0.1;
+      font-weight: 900;
+    }
+
+    .bento-grid {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    .bento-card {
+      border-radius: 1rem;
+      background-color: white;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+      overflow: hidden;
+    }
+    
+    .bento-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+
+    .fade-in {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+
+    .fade-in.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .parallax-container {
+      perspective: 1px;
+      height: 100vh;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .parallax-layer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+    }
+
+    .parallax-back {
+      transform: translateZ(-1px) scale(2);
+    }
+
+    .parallax-base {
+      transform: translateZ(0);
+    }
+    
+    /* Scroll Animation */
+    .sticky-container {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .flow-step {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .flow-step.active {
+      opacity: 1;
+    }
+
+    /* Code block styling */
+    pre[class*="language-"] {
+      border-radius: 0.5rem;
+      margin: 2rem 0;
+    }
+
+    .copy-button {
+      position: absolute;
+      right: 1rem;
+      top: 1rem;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      color: white;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .copy-button:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    /* Counter animation */
+    .count-animation {
+      display: inline-block;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--primary);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--secondary);
+    }
+  </style>
+</head>
+<body id="ea50a2c6-8fcf-49a2-b74f-6516b6c69f4c">
+  <!-- Hero Section -->
+  <header id="f9baf09e-3977-4d8e-8f1e-7fb7d72f89e3" class="relative h-screen flex items-center justify-center overflow-hidden">
+    <div id="2bf05f21-fd4c-48c6-a201-e24a1cc28a9f" class="absolute inset-0 z-0">
+      <div id="9800ac94-bdc9-4bf0-a089-9e8694f9502e" class="hero-number absolute text-right opacity-5 text-gray-800 -right-20 top-20">
+        LLVM
+      </div>
+      <div id="a7c83fe9-7c5d-48f1-bc2e-4d9584c1ffb6" class="absolute w-96 h-96 rounded-full bg-blue-100 opacity-20 -top-20 -left-20"></div>
+      <div id="c2e9410e-1efd-447d-8faa-b1908066dc1a" class="absolute w-64 h-64 rounded-full gradient-bg opacity-10 bottom-10 right-10"></div>
+    </div>
+    <div id="63c216b3-f705-4e1a-87dd-2f777e8b67da" class="container mx-auto px-4 z-10">
+      <div id="944b3529-e4bc-42a2-bb14-157dbd12a789" class="text-center">
+        <h1 id="8bb00364-3599-4e64-8762-f7a8e733325e" class="text-6xl md:text-8xl font-black mb-6">
+          <span id="dcfe0c62-7aa4-4909-a00b-8084ba07529c" class="gradient-text tracking-tight">LLVM</span>
+        </h1>
+        <p id="e177dac0-1c7a-48e1-80f5-bcf553798f51" class="text-3xl md:text-5xl font-bold mb-8">现代编译器基础架构</p>
+        <p id="e26a8d3d-1822-4736-bb03-5751c8d74049" class="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto">
+          一个用于构建编译器的开源框架和工具链集合，彻底改变了编译器的开发方式
+        </p>
+        <a id="03a96ca8-9977-4259-a8d2-5f8649431f6d" href="#core-architecture" class="mt-10 inline-block px-8 py-4 gradient-bg text-white font-bold rounded-full shadow-lg hover:shadow-xl transition-all duration-300">
+          探索 LLVM <i class="fas fa-chevron-down ml-2"></i>
+        </a>
+      </div>
+    </div>
+    <div id="e06ebcb1-708a-4567-94c7-b58a8b3c662c" class="absolute bottom-10 w-full text-center">
+      <div id="adddafc3-feeb-4aff-a3cd-8c5708527d42" class="animate-bounce">
+        <i class="fas fa-angle-double-down text-2xl text-gray-400"></i>
+      </div>
+    </div>
+  </header>
+
+  <!-- Introduction Section -->
+  <section id="introduction" class="py-20 bg-white">
+    <div id="b506e97d-9343-4923-b654-d85b0af1dd5a" class="container mx-auto px-4">
+      <div id="d997c777-af86-4344-9e4d-389e999b88fc" class="max-w-4xl mx-auto fade-in">
+        <p id="5be241a3-47d4-4a16-b54a-2584a7b92bc7" class="text-lg md:text-xl text-gray-700 leading-relaxed">
+          <span id="67eb2d8b-0ffd-42f3-ba27-53883066bb64" class="text-3xl font-bold gradient-text">LLVM</span>（Low Level Virtual Machine，低级虚拟机）最初由Chris Lattner于2000年在伊利诺伊大学作为博士研究项目启动，如今已发展成为工业界和学术界广泛采用的编译器基础设施。
+        </p>
+        <div id="949acd0d-0c85-4726-a0fc-f78293066d6d" class="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div id="0848e590-0eb2-40cd-a164-c9ff41288c4e" class="bg-gray-50 p-6 rounded-xl shadow-sm fade-in">
+            <h3 id="5c138237-b650-4698-bbba-578f753bf915" class="text-xl font-bold mb-4">从学术项目到行业标准</h3>
+            <p id="5478d039-7e9c-428d-9640-b02d8d7e56aa" class="text-gray-600">
+              LLVM的发展历程见证了它从一个学术研究项目，成长为现代编译器技术的基石，被Apple、Google、Microsoft等科技巨头广泛采用。
+            </p>
+          </div>
+          <div id="f7c09052-b4f1-498e-a0cf-70b284af2bdd" class="bg-gray-50 p-6 rounded-xl shadow-sm fade-in">
+            <h3 id="d2f8f350-4a2d-4847-9d3d-bd121ce40352" class="text-xl font-bold mb-4">革命性的编译器架构</h3>
+            <p id="5d2f71eb-7e3e-4caf-b97a-eb06b866656a" class="text-gray-600">
+              LLVM的模块化设计、统一的中间表示和强大的优化框架，为编译器技术带来了革命性的改变，降低了编程语言开发的门槛。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Core Architecture Section -->
+  <section id="core-architecture" class="py-20 bg-gray-50">
+    <div id="968b51e4-96c4-492e-82c3-712a3a821094" class="container mx-auto px-4">
+      <div id="c86c1a5e-87ea-4765-9d92-4cc7d54b0531" class="text-center mb-16 fade-in">
+        <h2 id="9743ecd7-a1d9-4697-bea2-fda071f60a9c" class="text-4xl md:text-5xl font-black mb-4">
+          <span id="d0a1c665-396f-4ea7-9f1f-1c923888513d" class="gradient-text">LLVM</span>
+          <span id="d1719e04-3c94-421e-832c-8ffe5be8981f" class="text-gray-800">的核心架构</span>
+        </h2>
+        <p id="b60268d9-3e2f-4dfd-b3ee-172c2e66dcbc" class="text-lg text-gray-600 max-w-3xl mx-auto">
+          LLVM采用模块化设计，整体架构可分为三个主要部分
+        </p>
+      </div>
+
+      <!-- Compiler Pipeline Visualization -->
+      <div id="ea18c828-c84a-42fe-96d2-95290372fb10" class="mb-20 px-4 py-10 bg-white rounded-2xl shadow-lg fade-in relative overflow-hidden">
+        <div id="compiler-flow" class="h-96 mx-auto relative">
+          <!-- Flow will be rendered by JS -->
+        </div>
+      </div>
+      
+      <!-- Architecture Components -->
+      <div id="5fc1a515-d98c-4d43-a316-e9007534dba0" class="bento-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Frontend -->
+        <div id="5e9c2e7b-347e-4ef5-8653-cbe640523771" class="bento-card p-6 lg:col-span-1 fade-in">
+          <div id="7a881f15-c77c-4aee-a7c1-edbd7e795669" class="mb-4">
+            <i class="fas fa-code text-4xl gradient-text"></i>
+          </div>
+          <h3 id="abd36b25-53e4-4bba-ae6e-89eec7ef1ec9" class="text-2xl font-bold mb-3">前端</h3>
+          <p id="78f20ff5-6f11-4ebe-9f9c-518c7c0cbf28" class="text-gray-600">
+            负责将源代码转换为LLVM中间表示（IR），包含词法分析、语法分析、语义分析等阶段。
+          </p>
+          <div id="38711f59-49d9-40c7-9890-3ffba003c03a" class="mt-4 text-sm">
+            <span id="98611eb3-4309-4a20-82c6-1bf80c59d00e" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">Clang</span>
+            <span id="d823a1aa-2007-450c-8384-f5372ee75841" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">Swift</span>
+            <span id="5cbcde78-95b3-4372-b234-7f74759ee013" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">Rust</span>
+          </div>
+        </div>
+        
+        <!-- IR -->
+        <div id="0827e175-8cb6-4cec-8deb-bd83b7f9dcaa" class="bento-card p-6 lg:col-span-1 fade-in">
+          <div id="280ca9a0-b7ce-4758-9bf3-8226a9b1a9a8" class="mb-4">
+            <i class="fas fa-exchange-alt text-4xl gradient-text"></i>
+          </div>
+          <h3 id="ff81750d-cc35-4426-a9ed-911db25040c4" class="text-2xl font-bold mb-3">中间表示</h3>
+          <p id="1e825b9b-c30e-44d1-9683-806e522f4049" class="text-gray-600">
+            LLVM的核心，是一种统一的代码表示形式，设计用于优化和代码生成，采用静态单赋值（SSA）形式。
+          </p>
+          <div id="22e7539e-5474-4a63-a47a-7caacd76d33c" class="mt-4 text-sm">
+            <span id="db224c2e-b868-464c-b7a7-deff8e5d29c2" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">.ll文件</span>
+            <span id="3f6207c0-2428-43cc-9916-01c8222a04c1" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">.bc文件</span>
+            <span id="9e2738e5-0b68-43c8-9a87-58dc2a86ebc5" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">静态单赋值</span>
+          </div>
+        </div>
+        
+        <!-- Optimizer -->
+        <div id="e1a7bcae-aec2-4825-ad4d-0c322e152fbc" class="bento-card p-6 lg:col-span-1 fade-in">
+          <div id="6f37003d-e3a2-49f5-ba45-854a019abf3c" class="mb-4">
+            <i class="fas fa-bolt text-4xl gradient-text"></i>
+          </div>
+          <h3 id="eee17fcc-0582-4d77-b6f6-5c78ceff4545" class="text-2xl font-bold mb-3">优化器</h3>
+          <p id="94cb319c-aa02-4745-b45e-5de8e0eaee7f" class="text-gray-600">
+            对IR进行各种优化，提高代码性能，通过Pass机制实现各种优化算法。
+          </p>
+          <div id="e447b20e-8349-4421-8153-38171fea4492" class="mt-4 text-sm">
+            <span id="27f38203-d27c-48ef-9cb9-c61b72ec3543" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">Pass机制</span>
+            <span id="3ee725ed-5ecb-4ef5-8826-8f6b188fcc63" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">常量折叠</span>
+            <span id="6e9064cb-dd9a-49df-b0e0-59b75ed4232c" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">循环优化</span>
+          </div>
+        </div>
+        
+        <!-- Backend -->
+        <div id="6b55d0ab-5918-4a85-a13e-9088dd94f365" class="bento-card p-6 lg:col-span-1 fade-in">
+          <div id="8c43a735-e7e1-453c-8b47-945f2424df0c" class="mb-4">
+            <i class="fas fa-microchip text-4xl gradient-text"></i>
+          </div>
+          <h3 id="1649a37c-2010-4ec2-b01e-92e87c64805a" class="text-2xl font-bold mb-3">后端</h3>
+          <p id="f4a02f38-5ba5-4134-9393-ce9734f9ce71" class="text-gray-600">
+            将优化后的IR转换为目标平台的机器码，负责目标代码的生成、汇编和链接。
+          </p>
+          <div id="9fdbc7d4-4daa-4050-a36a-af9555e5e177" class="mt-4 text-sm">
+            <span id="4f22bf34-b286-48f0-a7cb-a98f1172a457" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">X86</span>
+            <span id="24995316-9e54-4916-b5c1-2f24b33b67f1" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">ARM</span>
+            <span id="f6c8dffc-aa67-4bbd-9822-419a826267ae" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 mr-2 mb-2">RISC-V</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LLVM IR Section -->
+  <section id="llvm-ir" class="py-20 bg-white">
+    <div id="3e03f402-4f1a-4d06-b8dd-165baa6193a4" class="container mx-auto px-4">
+      <div id="2b726ca4-4373-4cb9-a883-8f25bf0129e1" class="text-center mb-16 fade-in">
+        <h2 id="ebec7a1d-29d2-4eae-abf5-c7b8ddeb0788" class="text-4xl md:text-5xl font-black mb-4">
+          <span id="90caf13a-485e-4e7c-831f-c71dca2c3a34" class="text-gray-800">LLVM</span>
+          <span id="5b6d5959-aefb-45e5-baa5-669d648f5600" class="gradient-text">IR</span>
+          <span id="2fe55b67-4552-41ac-ab1c-5b529394471b" class="text-gray-800">的特点</span>
+        </h2>
+        <p id="936b89ef-8129-4845-9155-860854016ff5" class="text-lg text-gray-600 max-w-3xl mx-auto">
+          LLVM IR（Intermediate Representation，中间表示）是LLVM框架的核心
+        </p>
+      </div>
+
+      <div id="a67f3eb6-f78a-4788-b8f5-d8f459d69402" class="flex flex-col md:flex-row gap-10 items-center">
+        <div id="9804f495-0c12-4fe5-a4d3-c39676d5f2b2" class="w-full md:w-1/2 fade-in">
+          <h3 id="c863e928-68a1-4832-9d69-48ea78ee9712" class="text-2xl font-bold mb-6">IR的核心特点</h3>
+          
+          <div id="6979987b-0cf3-4dbb-bd1b-77e88fb52871" class="space-y-4">
+            <div id="ad72eda4-4ab0-4ed4-993f-a16bd5a5c3d4" class="flex items-start">
+              <div id="71cda7fa-f125-4748-bb0d-3bdd020fb9e3" class="w-10 h-10 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+                <i class="fas fa-code-branch"></i>
+              </div>
+              <div id="32a709a6-957e-4972-99c5-e6d9df881c9d">
+                <h4 id="4c7e59cb-badf-4806-be7d-74b89e650f91" class="font-bold text-lg mb-1">三地址码形式</h4>
+                <p id="b3c0f884-b74a-424a-b07e-cc56055f0695" class="text-gray-600">类似于汇编语言的形式，每条指令最多有一个结果和两个操作数</p>
+              </div>
+            </div>
+            
+            <div id="5f37f638-dc0b-4d41-b048-5ae7c0b42d5d" class="flex items-start">
+              <div id="aecd4836-df19-452e-bb86-18fe3877f973" class="w-10 h-10 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+                <i class="fas fa-equals"></i>
+              </div>
+              <div id="2e162932-1c1f-4464-808f-eec467191b6c">
+                <h4 id="c053fc9c-0024-4d8e-91d5-cd1b69111ac9" class="font-bold text-lg mb-1">静态单赋值（SSA）</h4>
+                <p id="3f4e1ce5-55bf-4b5d-a68a-bc19c52cf0dd" class="text-gray-600">每个变量在IR中只被赋值一次，简化了优化过程</p>
+              </div>
+            </div>
+            
+            <div id="41fe7a41-1576-4c2e-8c91-33f512371c85" class="flex items-start">
+              <div id="5b876510-7e46-49ce-93e0-57a49a9dd54f" class="w-10 h-10 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+                <i class="fas fa-shield-alt"></i>
+              </div>
+              <div id="7c9d9a52-e336-4894-9f1c-ade7878348c0">
+                <h4 id="6ec60d49-e78e-4bdf-a92e-cd6e33309ad1" class="font-bold text-lg mb-1">强类型系统</h4>
+                <p id="9f4bf9e5-bdb5-4c9b-8451-578e0cdb079d" class="text-gray-600">确保编译过程中的类型安全</p>
+              </div>
+            </div>
+            
+            <div id="8117fc4a-001f-4cb8-a99f-0f23e01ec1db" class="flex items-start">
+              <div id="bb298d12-e6fe-4da0-a6da-ee0fe55f1ff4" class="w-10 h-10 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+                <i class="fas fa-globe"></i>
+              </div>
+              <div id="cf3e5ecd-59a6-46ac-8acb-928d894f7370">
+                <h4 id="2f603cc5-b69b-4c09-a3bc-ccaa34a870e8" class="font-bold text-lg mb-1">平台无关性</h4>
+                <p id="ac455450-6ef9-4709-acc5-1f08a1c18613" class="text-gray-600">不依赖于特定硬件平台，易于移植</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="72b9f57b-2d5e-4bea-b657-af30f6ee98e1" class="w-full md:w-1/2 fade-in">
+          <div id="e84ef6f2-1564-4856-aed1-16f146ffb3ef" class="relative bg-gray-900 p-6 rounded-xl shadow-lg">
+            <h3 id="666b939e-db07-41bf-9c20-07ed598b1ca8" class="text-xl font-bold mb-4 text-white">示例LLVM IR代码</h3>
+            <div id="a5e15827-2129-4cc4-bff5-3ad3fec6e080" class="relative">
+              <button id="copy-ir-code" class="copy-button">
+                <i class="far fa-copy mr-1"></i> 复制
+              </button>
+              <pre><code class="language-llvm">define i32 @add(i32 %a, i32 %b) {
+entry:
+  %sum = add i32 %a, %b
+  ret i32 %sum
+}
+
+define i32 @factorial(i32 %n) {
+entry:
+  %cmp = icmp sle i32 %n, 0
+  br i1 %cmp, label %return, label %recurse
+
+return:
+  ret i32 1
+
+recurse:
+  %n.minus.1 = sub i32 %n, 1
+  %fact = call i32 @factorial(i32 %n.minus.1)
+  %result = mul i32 %n, %fact
+  ret i32 %result
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LLVM Projects Section -->
+  <section id="llvm-projects" class="py-20 bg-gray-50">
+    <div id="00896e73-cb5a-4011-98d7-06e4d6e6ceec" class="container mx-auto px-4">
+      <div id="e648d491-68ec-4113-a7e3-f9d69f4aa1dd" class="text-center mb-16 fade-in">
+        <h2 id="a1847e39-2e30-4e8a-bc92-c41cdca5c376" class="text-4xl md:text-5xl font-black mb-4">
+          <span id="f38d299c-f1c4-4d7e-a0f1-2ddfb9615cb7" class="gradient-text">LLVM</span>
+          <span id="327935a6-bed6-4d2a-a201-aa8f6b3a1eb7" class="text-gray-800">的主要子项目</span>
+        </h2>
+        <p id="d84e7fe1-b4df-42f1-abcf-4acb81d9caa3" class="text-lg text-gray-600 max-w-3xl mx-auto">
+          LLVM生态系统包含多个子项目，共同构成完整的编译工具链
+        </p>
+      </div>
+
+      <div id="746fc6d5-0f78-4b39-8b9e-e8ac8ca2af9a" class="bento-grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div id="a14d7bba-28c1-479e-9fdd-0273d0706953" class="bento-card p-8 md:col-span-3 gradient-bg text-white fade-in">
+          <h3 id="20e2f9e1-68ac-46e8-90bf-51ab58d7d0ec" class="text-3xl font-bold mb-4">LLVM核心库</h3>
+          <p id="6db087bf-f680-4355-bc6c-28697cef518e" class="text-lg">
+            提供现代的源码和目标无关的优化器，支持多种CPU的代码生成，提供详细文档和API
+          </p>
+          <div id="1e951e00-0203-4e49-a9ea-1eba1e006f22" class="mt-8 flex items-center">
+            <div id="886c2a32-ac86-4c36-9143-963bcdab871e" class="text-6xl font-black opacity-30">01</div>
+            <div id="f9c4b18b-7f8e-4ecd-aace-dd437e4a044a" class="ml-auto">
+              <i class="fas fa-puzzle-piece text-4xl"></i>
+            </div>
+          </div>
+        </div>
+
+        <div id="025991d3-3220-4365-b603-6696cf6cdab0" class="bento-card p-6 fade-in">
+          <div id="94135640-6efe-4bdc-b133-ec79a153a26c" class="flex items-center justify-between mb-6">
+            <h3 id="1af23b86-ffcc-4439-a9ee-6d46f2719d9b" class="text-2xl font-bold">Clang</h3>
+            <i class="fas fa-code text-3xl gradient-text"></i>
+          </div>
+          <p id="3f859f38-d187-453e-8db1-eda3008612ce" class="text-gray-600 mb-4">
+            LLVM原生的C/C++/Objective-C编译器前端，提供快速编译、友好的错误提示和警告
+          </p>
+          <div id="ccf77768-1da0-40ff-9a01-b24db9682941" class="text-sm text-gray-500">
+            <i class="fas fa-check-circle text-green-500 mr-1"></i> 代码静态分析
+          </div>
+        </div>
+
+        <div id="d262315d-b0fa-49ce-97c7-b591c9ecf390" class="bento-card p-6 fade-in">
+          <div id="c8c0c953-8c4f-448b-b5c4-8521128929b0" class="flex items-center justify-between mb-6">
+            <h3 id="11045cda-377c-433e-8c2a-f23915913524" class="text-2xl font-bold">LLDB</h3>
+            <i class="fas fa-bug text-3xl gradient-text"></i>
+          </div>
+          <p id="349096b1-9886-4fea-a33c-57fe9f30c121" class="text-gray-600 mb-4">
+            基于LLVM和Clang提供的高性能调试器，比GDB更快、内存效率更高
+          </p>
+          <div id="f0cdd62e-d254-48d7-8eb3-8e9fd42429f2" class="text-sm text-gray-500">
+            <i class="fas fa-check-circle text-green-500 mr-1"></i> 快速调试响应
+          </div>
+        </div>
+
+        <div id="111fb64e-66fc-410c-b3a7-bfa2b8b39ed9" class="bento-card p-6 fade-in">
+          <div id="90531c5d-0046-44e8-a772-3aad62e1489e" class="flex items-center justify-between mb-6">
+            <h3 id="ae69eca2-b4a0-4392-bc20-bd58444fcf05" class="text-2xl font-bold">libc++</h3>
+            <i class="fas fa-plus text-3xl gradient-text"></i>
+          </div>
+          <p id="c4055536-ca20-4a33-8f24-fcc362c9ff6e" class="text-gray-600 mb-4">
+            符合标准的高性能C++标准库实现，全面支持C++11/14/17/20标准
+          </p>
+          <div id="d1d637ad-2f53-4296-be1a-cb02825888a6" class="text-sm text-gray-500">
+            <i class="fas fa-check-circle text-green-500 mr-1"></i> 高效内存管理
+          </div>
+        </div>
+
+        <div id="02d7dc7c-93e3-4377-9d75-50752158e987" class="bento-card p-6 fade-in">
+          <div id="5c2b9a3c-4db4-4a67-b29f-40dafbe706a7" class="flex items-center justify-between mb-6">
+            <h3 id="39c954ce-d11c-4ca5-aea9-348bc2ae8726" class="text-2xl font-bold">Polly</h3>
+            <i class="fas fa-sync text-3xl gradient-text"></i>
+          </div>
+          <p id="74e968ec-4ed4-44b4-9c9e-f77fe33f5bd7" class="text-gray-600 mb-4">
+            使用多面体模型实现高级循环和数据局部性优化
+          </p>
+          <div id="0405c910-f95a-4833-8ce6-eddd23e8bbf3" class="text-sm text-gray-500">
+            <i class="fas fa-check-circle text-green-500 mr-1"></i> 高级循环变换
+          </div>
+        </div>
+
+        <div id="bc80ca9a-2ad9-4945-831c-e8cba13e9ef2" class="bento-card p-6 fade-in">
+          <div id="4191f95d-9cbf-4629-9a46-ea9ef2ba90b0" class="flex items-center justify-between mb-6">
+            <h3 id="eb5e283a-f3c0-40ee-b62b-eea724810580" class="text-2xl font-bold">MLIR</h3>
+            <i class="fas fa-brain text-3xl gradient-text"></i>
+          </div>
+          <p id="afbda7ff-dd7f-46db-8c92-be4eff95fd9b" class="text-gray-600 mb-4">
+            用于构建可重用和可扩展的编译器基础设施的框架，专为机器学习和其他领域优化而设计
+          </p>
+          <div id="565463d2-9f33-4c34-93eb-98763e8aaabd" class="text-sm text-gray-500">
+            <i class="fas fa-check-circle text-green-500 mr-1"></i> AI模型编译优化
+          </div>
+        </div>
+
+        <div id="55c7d658-8408-483d-9d5e-30ef54bbd8ee" class="bento-card p-6 fade-in">
+          <div id="76aadfc7-4f02-469c-adb5-54e988e88385" class="flex items-center justify-between mb-6">
+            <h3 id="f574a487-4e15-4497-9fa6-0ba97cc7833d" class="text-2xl font-bold">OpenMP</h3>
+            <i class="fas fa-tasks text-3xl gradient-text"></i>
+          </div>
+          <p id="84536702-2ff3-4a2f-8ff9-2b3ff6278884" class="text-gray-600 mb-4">
+            提供OpenMP运行时环境，支持并行编程
+          </p>
+          <div id="1fce1b91-61e7-476a-9ca2-066468bf42f9" class="text-sm text-gray-500">
+            <i class="fas fa-check-circle text-green-500 mr-1"></i> 高效多线程支持
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Optimization Section -->
+  <section id="optimization" class="py-20 bg-white">
+    <div id="5dc30305-981e-4014-8b14-d42bb6aa2b63" class="container mx-auto px-4">
+      <div id="f429ad0e-4602-4cb0-bfc9-696876a6dc2d" class="text-center mb-16 fade-in">
+        <h2 id="b720bcd3-9b5a-4089-a359-9280af6fb77f" class="text-4xl md:text-5xl font-black mb-4">
+          <span id="b748e9b7-49a0-428d-9b81-be3fa0bf01a4" class="gradient-text">LLVM</span>
+          <span id="0fe9acdc-4be0-4884-b615-22317bd224ef" class="text-gray-800">的优化能力</span>
+        </h2>
+        <p id="277b4c8e-9ce8-4c75-b976-c06eb99fdd9c" class="text-lg text-gray-600 max-w-3xl mx-auto">
+          LLVM优化器是其强大功能的核心，支持多种优化技术
+        </p>
+      </div>
+
+      <div id="f3b3c29f-3443-4088-966e-9637e8acecbe" class="relative mb-20 fade-in">
+        <div id="d07f2e99-2ffb-4c77-b307-9f099419d1ff" class="absolute -left-4 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-400 to-blue-600"></div>
+        <div id="ea399a66-1e46-4c46-a074-0d3d13e989c8" class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div id="60cc4a94-e95a-491f-a012-03e2e02774de">
+            <h3 id="9e0946a0-d222-4bd0-a3b7-337dd5b04ce9" class="text-2xl font-bold mb-4">基本优化</h3>
+            <ul id="e9f67edb-98fa-453a-ad61-bcaeff217063" class="space-y-3 text-gray-600">
+              <li id="51f68760-21a9-4cac-88da-5b5a774c2d23" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                常量折叠和传播
+              </li>
+              <li id="c15702d0-8c85-4e6f-aaf2-a3921ba37925" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                死代码消除
+              </li>
+              <li id="bd8cbb03-6cee-415f-bab1-af86b5b41a40" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                公共子表达式消除
+              </li>
+              <li id="fa1dfe0d-51d1-49ec-8259-6311f9182bc0" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                内联函数展开
+              </li>
+            </ul>
+          </div>
+          
+          <div id="c109d573-dbf5-45fa-ba8b-27b571c5056e">
+            <h3 id="3593e3ac-78f6-4593-aa43-96d0262a81e5" class="text-2xl font-bold mb-4">循环优化</h3>
+            <ul id="18137c99-1fb2-41d5-a121-24d8a5c8b8ea" class="space-y-3 text-gray-600">
+              <li id="71fa6414-122e-4dec-a5e8-9e87d1d36756" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                循环展开（Loop Unrolling）
+              </li>
+              <li id="58837ef2-1bfe-42c4-a7e1-db2b2104b808" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                循环不变代码外提
+              </li>
+              <li id="6204e9f3-365d-4af8-a6fc-cedf14158951" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                循环融合和分割
+              </li>
+              <li id="9d694c77-99d1-4f70-9ebe-59a81005d2e3" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                自动向量化
+              </li>
+            </ul>
+          </div>
+          
+          <div id="92078782-dcc4-4e63-baec-cde987f50eb4">
+            <h3 id="8ff9b78e-6873-4fe3-9f8c-ced396169e4c" class="text-2xl font-bold mb-4">链接时优化</h3>
+            <ul id="3b92dbfa-df7f-4ec5-a037-2b28ae2943de" class="space-y-3 text-gray-600">
+              <li id="3a5ef6ec-d3dd-4a83-8c98-f372449c85eb" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                跨模块优化
+              </li>
+              <li id="9f86e88b-e15f-408e-8242-85a320e9a358" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                全程序分析和优化
+              </li>
+              <li id="2f3180e1-b9cd-4c08-8ba8-8e8748e3bfcd" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                内联策略优化
+              </li>
+              <li id="a639cf73-710b-4d73-a94d-9f4403046dc1" class="flex items-center">
+                <i class="fas fa-check-circle text-blue-500 mr-2"></i>
+                代码大小优化
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Optimization Performance Chart -->
+      <div id="13790890-c522-4ec5-9a0e-8cddd16a1431" class="bg-gray-50 p-8 rounded-2xl shadow-sm fade-in">
+        <h3 id="20df6b2f-7fa0-44e1-9dd8-fad969438eb8" class="text-2xl font-bold mb-6">优化性能对比</h3>
+        <div id="optimization-chart" class="w-full h-80"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Applications Section -->
+  <section id="applications" class="py-20 bg-gray-50">
+    <div id="9c966905-8475-4a8b-8e93-0df785ac116d" class="container mx-auto px-4">
+      <div id="fccb7340-27ea-4a44-92c1-302153371026" class="text-center mb-16 fade-in">
+        <h2 id="2c7a4e9d-a596-4b6c-9ddb-a980401c9667" class="text-4xl md:text-5xl font-black mb-4">
+          <span id="c2ee4684-a3f4-4fc5-b8d0-52e2b83b19b3" class="gradient-text">LLVM</span>
+          <span id="2edf4a86-8e48-4830-8dcf-990950bb1c13" class="text-gray-800">的应用场景</span>
+        </h2>
+        <p id="92b24162-5704-4d7c-9c03-f4eaef4ba790" class="text-lg text-gray-600 max-w-3xl mx-auto">
+          LLVM的应用范围非常广泛，从编程语言实现到深度学习编译器
+        </p>
+      </div>
+
+      <div id="8e257c1e-4505-4325-8a93-aa426904b72e" class="bento-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Programming Languages -->
+        <div id="4cd54258-9fe3-424f-a526-89ffd02cff3d" class="bento-card p-6 md:col-span-2 lg:col-span-1 fade-in">
+          <div id="b4043a78-40ff-44c3-89ea-c6d9a62b9dd2" class="flex items-center justify-between mb-4">
+            <i class="fas fa-code text-4xl gradient-text"></i>
+            <span id="4cd78a14-fcaa-4c01-89c2-ef8e38fc7a41" class="text-sm font-semibold text-gray-500">01</span>
+          </div>
+          <h3 id="1cdc520a-74a0-4315-8fde-aa370a3befd3" class="text-2xl font-bold mb-3">编程语言实现</h3>
+          <p id="af0ab2fe-2d24-4f35-9cfc-cd50887949f9" class="text-gray-600">
+            作为新编程语言的后端（Swift、Rust等）或为现有语言提供更高效的编译器（C/C++）
+          </p>
+          <div id="802a639a-c62c-4875-a91e-81d18ab069fa" class="mt-4 flex flex-wrap">
+            <span id="c9064ad3-ad83-4ee0-b912-f2ab41f61ef5" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">Swift</span>
+            <span id="cd3af410-8258-4f09-9104-ceed1f003c2a" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">Rust</span>
+            <span id="adb89193-7965-456f-9f5b-fe7ff2d02a20" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">C/C++</span>
+          </div>
+        </div>
+
+        <!-- Static Analysis -->
+        <div id="2927183e-e131-4eab-a07b-3810e061c0e0" class="bento-card p-6 fade-in">
+          <div id="f7fdec59-e30c-44ed-9a40-f2450cd7adaa" class="flex items-center justify-between mb-4">
+            <i class="fas fa-search-plus text-4xl gradient-text"></i>
+            <span id="1f17b764-9fb2-4312-93ad-9204579e5a27" class="text-sm font-semibold text-gray-500">02</span>
+          </div>
+          <h3 id="c5c5b7fb-3820-4a83-9cdd-c9c26df36a3e" class="text-2xl font-bold mb-3">静态分析工具</h3>
+          <p id="88d0985c-6824-4dc4-9351-5acc7fc87eae" class="text-gray-600">
+            Clang Static Analyzer和clang-tidy代码质量检查工具等静态分析应用
+          </p>
+          <div id="3da9af17-70b2-454f-82cd-e238d8e0cc1f" class="mt-4 flex flex-wrap">
+            <span id="efa589a1-e231-46ae-bfaa-13303c88fbf7" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">静态分析</span>
+            <span id="328d03c8-8774-4370-bf0f-d3c86781c06e" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">代码质量</span>
+          </div>
+        </div>
+
+        <!-- JIT Compilers -->
+        <div id="bb15dfad-c4dc-4e5c-a0e3-6316dc73ec72" class="bento-card p-6 fade-in">
+          <div id="eb3d0dc2-9e80-45d3-a444-2e8a92578721" class="flex items-center justify-between mb-4">
+            <i class="fas fa-bolt text-4xl gradient-text"></i>
+            <span id="9e75c6c7-6404-4812-9358-6d213e5c1c23" class="text-sm font-semibold text-gray-500">03</span>
+          </div>
+          <h3 id="6da2b2ac-3056-41ca-8df6-bcd5429adaed" class="text-2xl font-bold mb-3">JIT编译器</h3>
+          <p id="276035d8-1125-404c-a876-de9595542ac5" class="text-gray-600">
+            为JavaScript、Python等动态语言提供JIT编译，用于虚拟机和运行时系统
+          </p>
+          <div id="4fda6c91-a401-4a0d-b3bc-07884c82e301" class="mt-4 flex flex-wrap">
+            <span id="249c6334-2683-4af1-928a-8d22ea184b3a" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">JIT编译</span>
+            <span id="c68c3f90-a9e5-495c-9fed-de6177ffec66" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">动态语言</span>
+          </div>
+        </div>
+
+        <!-- Hardware Simulation -->
+        <div id="96d0aaf6-9a0d-4159-9389-a38143ba9126" class="bento-card p-6 fade-in">
+          <div id="78c67d88-3289-493d-92e3-4bea58f8b3a9" class="flex items-center justify-between mb-4">
+            <i class="fas fa-microchip text-4xl gradient-text"></i>
+            <span id="c5c96ff1-9108-4cc3-a02f-104897219bef" class="text-sm font-semibold text-gray-500">04</span>
+          </div>
+          <h3 id="7e4389b8-f839-40ae-a177-0f65983c499a" class="text-2xl font-bold mb-3">硬件模拟和仿真</h3>
+          <p id="b2d09e0b-ca7a-4e60-baca-2b66e8e2d2f5" class="text-gray-600">
+            生成硬件描述语言（HDL）的模拟代码，加速硬件设计和验证
+          </p>
+          <div id="db64c54a-c04e-4391-a0ef-93e9e247915a" class="mt-4 flex flex-wrap">
+            <span id="744c8380-8bed-4878-9528-271b32a40d4e" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">硬件模拟</span>
+            <span id="35317869-239c-4f73-83b3-9f68c42c345d" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">HDL</span>
+          </div>
+        </div>
+
+        <!-- HPC -->
+        <div id="0ee213f0-2b96-4cb4-a6e9-9a0ba0ca0234" class="bento-card p-6 fade-in">
+          <div id="26a0ebe3-2166-4be0-affd-ed31a1c42d6b" class="flex items-center justify-between mb-4">
+            <i class="fas fa-tachometer-alt text-4xl gradient-text"></i>
+            <span id="307b52ae-1175-4bd3-88f2-8e44f01e689e" class="text-sm font-semibold text-gray-500">05</span>
+          </div>
+          <h3 id="9f091831-60a6-4368-9208-c6e2231060f2" class="text-2xl font-bold mb-3">高性能计算</h3>
+          <p id="f64de30e-2fcd-42a9-a594-1146625032fa" class="text-gray-600">
+            自动向量化和并行化，针对特定硬件的代码优化
+          </p>
+          <div id="153fb826-dd09-4184-8ca4-a307671f5562" class="mt-4 flex flex-wrap">
+            <span id="ff64c629-3dfe-4d5b-8f63-9969a0e8c9c5" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">向量化</span>
+            <span id="983b4dce-453e-469d-a4bc-d4e535d40fb3" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">GPU编译</span>
+          </div>
+        </div>
+
+        <!-- Deep Learning -->
+        <div id="d757a371-b38c-43ab-8e47-be01f1f725e0" class="bento-card p-6 md:col-span-2 fade-in">
+          <div id="9d8a2032-5c79-4143-a4dd-bc3f81f3ef1e" class="flex items-center justify-between mb-4">
+            <i class="fas fa-brain text-4xl gradient-text"></i>
+            <span id="4e45dc98-b27f-4f7c-88b0-d124a391a686" class="text-sm font-semibold text-gray-500">06</span>
+          </div>
+          <h3 id="76ba1382-4562-4c2d-a2aa-efa06c5925a6" class="text-2xl font-bold mb-3">深度学习编译器</h3>
+          <p id="f076fdb4-50a9-48c7-a6e8-b28cb8c4167c" class="text-gray-600">
+            TVM、XLA等基于LLVM构建，优化神经网络模型执行效率
+          </p>
+          <div id="7806e1f5-2a71-47b6-823e-2cbd9d8604dd" class="mt-4 flex flex-wrap">
+            <span id="872f00fc-4de1-44a8-b341-f2aaad2046a3" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">TVM</span>
+            <span id="b15a4be0-136f-4c37-be08-d9c58a9fd73c" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">XLA</span>
+            <span id="82672927-3aec-4251-913c-23943982d5d3" class="inline-block bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-sm mr-2 mb-2">神经网络优化</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Advantages Section -->
+  <section id="advantages" class="py-20 bg-white">
+    <div id="37c443ae-c3d4-4fa6-93db-880eb794763d" class="container mx-auto px-4">
+      <div id="c415f516-b4e7-4c4f-b9b9-f139768af3ca" class="text-center mb-16 fade-in">
+        <h2 id="f15cce89-493b-4a77-98a0-5aff39b490a3" class="text-4xl md:text-5xl font-black mb-4">
+          <span id="64638640-3a1c-41e0-ad14-0146393a140e" class="gradient-text">LLVM</span>
+          <span id="bf624464-cf27-4de7-a8f3-be74c1bee981" class="text-gray-800">相比传统编译器的优势</span>
+        </h2>
+        <p id="e3b51f72-ea15-4e6c-ab56-4b015a2899bb" class="text-lg text-gray-600 max-w-3xl mx-auto">
+          LLVM的设计理念和架构为现代编译器技术带来了诸多优势
+        </p>
+      </div>
+
+      <div id="c329dc6c-738a-406f-bb0b-4e5448dd9ad5" class="bento-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div id="750e3949-f880-478e-8e0d-ff4a6b9da2ff" class="fade-in">
+          <div id="374ab4cc-f214-4789-b455-c03bc036b0ff" class="h-1 w-24 gradient-bg mb-6 rounded-full"></div>
+          <h3 id="33c55e36-96da-4158-bdcb-f8bcf1dded73" class="text-2xl font-bold mb-4">模块化设计</h3>
+          <p id="9410a162-dd81-4c25-b6c7-6278d22deb92" class="text-gray-600">
+            前端、优化器和后端分离，可独立开发和替换，降低开发复杂度，提高重用性
+          </p>
+        </div>
+
+        <div id="bb5fb19f-9702-40fb-ad0f-5bb25af5f59e" class="fade-in">
+          <div id="fec958f7-1f1a-45ed-aaca-b6485bc197e5" class="h-1 w-24 gradient-bg mb-6 rounded-full"></div>
+          <h3 id="5efce797-70c5-4045-9590-391acc97c0bc" class="text-2xl font-bold mb-4">统一的中间表示</h3>
+          <p id="f512f53a-5073-4dfa-8c73-6e9b7e833e75" class="text-gray-600">
+            所有语言共享同一个IR，优化可应用于任何通过前端生成IR的语言
+          </p>
+        </div>
+
+        <div id="55c61fb3-dd1c-4e70-9b24-e3586fc31e25" class="fade-in">
+          <div id="71c0e7ca-9d42-4631-9921-5b69ad13bb82" class="h-1 w-24 gradient-bg mb-6 rounded-full"></div>
+          <h3 id="e7aa2601-c9c3-4470-b439-f4e2a79709b7" class="text-2xl font-bold mb-4">强大的优化框架</h3>
+          <p id="f8095f0c-5470-4ba9-9bd3-5a4f255df389" class="text-gray-600">
+            完善的Pass管理系统，丰富的分析和转换API，使得高级优化变得容易实现
+          </p>
+        </div>
+
+        <div id="fb8cb61c-734f-4d2c-b9bd-c6041a90fefa" class="fade-in">
+          <div id="80b20a9d-055e-4ed1-9403-01e4740b93d8" class="h-1 w-24 gradient-bg mb-6 rounded-full"></div>
+          <h3 id="ca75d8cd-4eca-4b21-98c2-9457c5261cc9" class="text-2xl font-bold mb-4">跨平台支持</h3>
+          <p id="db305285-7c9b-40c0-9e1e-2f2dd5843eba" class="text-gray-600">
+            支持多种硬件架构，简化交叉编译，为多平台部署提供便利
+          </p>
+        </div>
+
+        <div id="30e6de7d-56b1-4001-a65d-24f3896ff1c3" class="fade-in">
+          <div id="c4ec7555-f7de-4950-a64d-5096f238c49d" class="h-1 w-24 gradient-bg mb-6 rounded-full"></div>
+          <h3 id="cfba3e77-f2e7-45b4-a0af-f17db07d5e74" class="text-2xl font-bold mb-4">开源社区支持</h3>
+          <p id="a0f29a9f-ce1a-4a41-b65c-6b8f466ca985" class="text-gray-600">
+            活跃的开发者社区，持续改进和更新，确保技术始终保持领先
+          </p>
+        </div>
+
+        <div id="d767ed37-73c3-42b2-a8c4-c2f187aa1895" class="fade-in">
+          <div id="57e180fa-101f-483c-9e98-b44b38fb0a88" class="h-1 w-24 gradient-bg mb-6 rounded-full"></div>
+          <h3 id="f7f64281-da52-425e-a0eb-18dfacf939dc" class="text-2xl font-bold mb-4">高性能代码生成</h3>
+          <p id="73845b52-920c-4eb5-8679-8e82511722f8" class="text-gray-600">
+            针对现代CPU和GPU架构优化的代码生成能力，提供卓越性能
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tools Section -->
+  <section id="tools" class="py-20 bg-gray-50">
+    <div id="1a496ad8-c367-4d1e-a63e-b3a041f67ae7" class="container mx-auto px-4">
+      <div id="3af40110-b297-4815-a7b9-9d4863d84c58" class="text-center mb-16 fade-in">
+        <h2 id="659028f5-54c5-494e-9b6f-c2290a59368e" class="text-4xl md:text-5xl font-black mb-4">
+          <span id="5b9a1455-8c39-4191-98b4-43825d487d0f" class="gradient-text">LLVM</span>
+          <span id="5c61fd6e-e3eb-4e59-9a57-59a95e1b3e6e" class="text-gray-800">工具链</span>
+        </h2>
+        <p id="2a4ddb24-35cb-4012-92c0-2ce5609f7669" class="text-lg text-gray-600 max-w-3xl mx-auto">
+          LLVM工具链包含多个命令行工具，支持完整的编译流程
+        </p>
+      </div>
+
+      <div id="85cb7702-7819-437d-a49e-77eb8b753f29" class="bg-white rounded-2xl shadow-lg p-8 fade-in">
+        <div id="20f47ea8-c8ce-418c-8170-53936e46f68e" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div id="6640510a-7399-4e91-a4cc-5913535a4937" class="flex items-start">
+            <div id="338401b1-cacd-4c36-84db-9262de15c50a" class="w-12 h-12 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+              <i class="fas fa-code"></i>
+            </div>
+            <div id="5024fddb-958c-4a6a-b108-a2fb4c35d644">
+              <h4 id="43d90d9c-bbca-46d2-8173-5172b7d39e6c" class="font-bold text-lg mb-1">clang/clang++</h4>
+              <p id="510d6240-3610-4742-be1c-8ca452b5534a" class="text-gray-600">C/C++/Objective-C编译器，替代GCC</p>
+            </div>
+          </div>
+
+          <div id="44c00b87-fc2a-4d2c-b2bc-e24c73c5419e" class="flex items-start">
+            <div id="75153528-40da-4720-aa89-dcc113a2e990" class="w-12 h-12 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+              <i class="fas fa-file-code"></i>
+            </div>
+            <div id="75cfb19f-5dec-47c4-9de7-57eb4ae52bd6">
+              <h4 id="3538a8b5-d51a-47be-908e-d6a70cffa816" class="font-bold text-lg mb-1">llvm-as</h4>
+              <p id="3924d814-0f5b-4524-bc59-796afcaf0caf" class="text-gray-600">LLVM汇编器，将.ll文件转换为.bc文件</p>
+            </div>
+          </div>
+
+          <div id="62c1670e-425f-43df-ad56-5303c48817f4" class="flex items-start">
+            <div id="4ba0acef-ad40-4e83-b532-c5b5d597de87" class="w-12 h-12 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+              <i class="fas fa-file-alt"></i>
+            </div>
+            <div id="ac929953-0c91-40a7-af09-5e9f7d9d03a2">
+              <h4 id="878ad79e-bc6f-48ca-bd4e-9d568a870fa4" class="font-bold text-lg mb-1">llvm-dis</h4>
+              <p id="d74804ae-f392-449f-8f1c-332fbdf3dd92" class="text-gray-600">LLVM反汇编器，将.bc文件转换为.ll文件</p>
+            </div>
+          </div>
+
+          <div id="28752292-6742-422b-bba5-390a0b25f3c6" class="flex items-start">
+            <div id="f70f10fc-cc33-4aad-8ab8-467d9de705b9" class="w-12 h-12 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+              <i class="fas fa-bolt"></i>
+            </div>
+            <div id="c6361c7a-6256-4afc-9eea-32635a72cce8">
+              <h4 id="403c21fa-b071-4c34-a232-1a2c7ee15ca2" class="font-bold text-lg mb-1">opt</h4>
+              <p id="e2ca7ba9-428d-4ace-a684-85355e7ceb09" class="text-gray-600">LLVM IR优化器，用于应用各种优化Pass</p>
+            </div>
+          </div>
+
+          <div id="882177c6-2588-44fa-a787-b096acfe94ed" class="flex items-start">
+            <div id="84637796-6b2e-46b9-9e02-60df85ff97ee" class="w-12 h-12 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+              <i class="fas fa-microchip"></i>
+            </div>
+            <div id="c7a8abae-d9be-44ee-a201-ae0eb61ec566">
+              <h4 id="25d1fa20-54f2-4488-a87e-0d017fdc4721" class="font-bold text-lg mb-1">llc</h4>
+              <p id="c58780b9-25cd-4e48-a3e9-1095cabdef49" class="text-gray-600">LLVM静态编译器，将LLVM IR编译为目标汇编代码</p>
+            </div>
+          </div>
+
+          <div id="9998ff5e-bcc3-4056-8c31-86feae8fae0d" class="flex items-start">
+            <div id="594f6f5b-8826-4bec-a864-07a7291d238d" class="w-12 h-12 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+              <i class="fas fa-bug"></i>
+            </div>
+            <div id="2805c588-92a5-4874-ad06-e0686220e31c">
+              <h4 id="8bb42ec2-5933-45dc-86a2-ac9490f2dcbb" class="font-bold text-lg mb-1">lldb</h4>
+              <p id="30c18b21-7e94-4308-8c24-dffa2cbb5e67" class="text-gray-600">调试器，用于调试编译后的程序</p>
+            </div>
+          </div>
+
+          <div id="89acddf9-3cce-4828-8e6c-ef1409637fe9" class="flex items-start">
+            <div id="9bb92039-fa35-47c4-98ba-053d548bb4a1" class="w-12 h-12 flex-shrink-0 rounded-full gradient-bg flex items-center justify-center text-white mr-4">
+              <i class="fas fa-link"></i>
+            </div>
+            <div id="9e058498-566e-4fd1-8c2c-11fde8fda20a">
+              <h4 id="cf58306c-234f-4082-840b-27f7391a66db" class="font-bold text-lg mb-1">llvm-link</h4>
+              <p id="fa1c5baa-2431-4edf-93fc-c7c0853c81af" class="text-gray-600">LLVM位码链接器，用于链接多个LLVM位码文件</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Summary Section -->
+  <section id="summary" class="py-20 bg-white">
+    <div id="e647afb4-35c0-4416-a98c-1da29957bfa9" class="container mx-auto px-4">
+      <div id="ef8ffc94-5494-48bc-b627-e5f2957b581a" class="max-w-4xl mx-auto fade-in">
+        <h2 id="cfce039a-baa2-4673-9fa3-f1f9e938a4de" class="text-4xl font-black mb-8 text-center">总结</h2>
+        <div id="d74cfcf8-1b08-4d31-b58c-38ead65bca94" class="text-lg text-gray-700 leading-relaxed space-y-6">
+          <p id="53a77521-7a37-4fcd-a8eb-15a1c73f9f51">
+            LLVM作为现代编译器基础设施的基石，通过其模块化设计、强大的中间表示和优化能力，彻底改变了编译器的开发方式。它不仅为现有语言提供了高性能实现，也极大地降低了新编程语言的开发门槛。
+          </p>
+          <p id="69f628f9-63eb-4970-9047-10b29b4b6641">
+            随着技术的不断发展，LLVM正在成为越来越多领域的核心基础设施，从传统编译器、JIT运行时到深度学习框架，LLVM的影响力持续扩大，推动着编程语言和编译技术的创新。
+          </p>
+        </div>
+        
+        <div id="aafd1442-ffbf-494a-8847-b07f1f13ceef" class="mt-12 text-center">
+          <a id="dfba453d-6baa-4e83-9e2e-e95eb187f5ed" href="https://llvm.org" target="_blank" class="inline-block px-8 py-4 gradient-bg text-white font-bold rounded-full shadow-lg hover:shadow-xl transition-all duration-300">
+            探索 LLVM 官方网站 <i class="fas fa-external-link-alt ml-2"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer id="8851cbef-2fdb-4c18-9554-ca23a9c5c4cf" class="bg-gray-900 text-white py-12">
+    <div id="214f4009-eaa4-4bdd-8b46-2ff5f5e7117c" class="container mx-auto px-4">
+      <div id="faef4328-1954-4b80-9047-8f70c111e450" class="text-center">
+        <h2 id="9fd4808b-b559-4289-ba6f-cca8b2e6c062" class="text-2xl font-bold mb-6">LLVM：现代编译器基础架构</h2>
+        <p id="b24d174a-111d-497e-8622-2f94e1b8a2c0" class="mb-6 text-gray-400">
+          本页面展示了LLVM的核心概念与特性，探索编译器技术的前沿
+        </p>
+        <div id="ff159aa3-321c-484a-a9d5-d5d0de2ddfba" class="flex justify-center space-x-4 mb-8">
+          <a id="7c0207f0-dbee-45fb-b32f-d5d5ac775672" href="https://github.com/llvm/llvm-project" target="_blank" class="text-gray-400 hover:text-white transition-colors">
+            <i class="fab fa-github text-2xl"></i>
+          </a>
+          <a id="3b89c34c-31b0-479a-ac08-ffa528bd0a94" href="https://twitter.com/llvmorg" target="_blank" class="text-gray-400 hover:text-white transition-colors">
+            <i class="fab fa-twitter text-2xl"></i>
+          </a>
+          <a id="b9ec7e96-9f97-476c-80aa-413de366cfd4" href="https://llvm.discourse.group/" target="_blank" class="text-gray-400 hover:text-white transition-colors">
+            <i class="fas fa-comments text-2xl"></i>
+          </a>
+        </div>
+        <p id="67004402-ac46-4698-80d6-94941b71e862" class="text-sm text-gray-500">
+          © 2023 LLVM介绍页面 | 采用现代编译器技术构建
+        </p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Fade-in animation for elements
+    function handleScrollAnimation() {
+      const elements = document.querySelectorAll('.fade-in');
+      
+      elements.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        
+        // Check if element is in viewport
+        if (rect.top < windowHeight - 100) {
+          el.classList.add('active');
+        }
+      });
+    }
+
+    // Initialize scroll animation
+    window.addEventListener('scroll', handleScrollAnimation);
+    window.addEventListener('load', handleScrollAnimation);
+
+    // Copy code functionality
+    document.getElementById('copy-ir-code').addEventListener('click', function() {
+      const codeText = document.querySelector('.language-llvm').textContent;
+      navigator.clipboard.writeText(codeText).then(() => {
+        this.innerHTML = '<i class="fas fa-check mr-1"></i> 已复制';
+        setTimeout(() => {
+          this.innerHTML = '<i class="far fa-copy mr-1"></i> 复制';
+        }, 2000);
+      });
+    });
+
+    // Render optimization performance chart
+    window.addEventListener('DOMContentLoaded', () => {
+      const ctx = document.createElement('canvas');
+      document.getElementById('optimization-chart').appendChild(ctx);
+      
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['无优化', '基本优化', '中等优化', '激进优化', '链接时优化'],
+          datasets: [{
+            label: '相对执行速度',
+            data: [1, 1.5, 2.3, 3.1, 3.8],
+            backgroundColor: [
+              'rgba(54, 162, 235, 0.2)',
+              'rgba(54, 162, 235, 0.4)',
+              'rgba(54, 162, 235, 0.6)',
+              'rgba(54, 162, 235, 0.8)',
+              'rgba(54, 162, 235, 1)'
+            ],
+            borderColor: [
+              'rgba(54, 162, 235, 1)',
+              'rgba(54, 162, 235, 1)',
+              'rgba(54, 162, 235, 1)',
+              'rgba(54, 162, 235, 1)',
+              'rgba(54, 162, 235, 1)'
+            ],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: '性能提升倍数'
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: '优化级别'
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `性能提升: ${context.parsed.y}x`;
+                }
+              }
+            }
+          }
+        }
+      });
+      
+      // Initialize Prism.js for code highlighting
+      Prism.highlightAll();
+    });
+
+    // Create the LLVM Compiler Pipeline Flow
+    window.addEventListener('DOMContentLoaded', () => {
+      const compilerFlow = document.getElementById('compiler-flow');
+      
+      // Pipeline steps
+      const steps = [
+        { name: "源代码", icon: "fas fa-code", color: "#3b82f6" },
+        { name: "前端编译器", icon: "fas fa-arrow-right", color: "#3b82f6" },
+        { name: "LLVM IR", icon: "fas fa-exchange-alt", color: "#0ea5e9" },
+        { name: "优化器", icon: "fas fa-arrow-right", color: "#0ea5e9" },
+        { name: "优化后的IR", icon: "fas fa-bolt", color: "#06b6d4" },
+        { name: "后端编译器", icon: "fas fa-arrow-right", color: "#06b6d4" },
+        { name: "目标代码", icon: "fas fa-microchip", color: "#0891b2" }
+      ];
+      
+      // Create flow elements
+      steps.forEach((step, index) => {
+        const stepEl = document.createElement('div');
+        stepEl.className = 'absolute flex flex-col items-center transition-all duration-500';
+        stepEl.style.left = `${(index / (steps.length - 1)) * 100}%`;
+        stepEl.style.transform = 'translateX(-50%)';
+        
+        const iconEl = document.createElement('div');
+        iconEl.className = 'w-16 h-16 rounded-full flex items-center justify-center text-white mb-4';
+        iconEl.style.background = step.color;
+        iconEl.innerHTML = `<i class="${step.icon} text-2xl"></i>`;
+        
+        const nameEl = document.createElement('div');
+        nameEl.className = 'text-lg font-bold';
+        nameEl.textContent = step.name;
+        
+        stepEl.appendChild(iconEl);
+        stepEl.appendChild(nameEl);
+        compilerFlow.appendChild(stepEl);
+        
+        if (index < steps.length - 1) {
+          const lineEl = document.createElement('div');
+          lineEl.className = 'absolute h-1 bg-gradient-to-r from-blue-500 to-cyan-500';
+          lineEl.style.left = `${(index / (steps.length - 1)) * 100}%`;
+          lineEl.style.right = `${100 - ((index + 1) / (steps.length - 1)) * 100}%`;
+          lineEl.style.top = '8px';
+          compilerFlow.appendChild(lineEl);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
