@@ -1,0 +1,41 @@
+baseURL = "https://example.github.io/"
+languageCode = "zh-CN"
+title = "我的GitHub Pages博客"
+theme = "ananke"
+
+# 启用中文支持
+hasCJKLanguage = true
+summaryLength = 70
+
+# 菜单配置
+[menu]
+  [[menu.main]]
+    name = "首页"
+    url = "/"
+    weight = 1
+  [[menu.main]]
+    name = "文章"
+    url = "/posts/"
+    weight = 2
+  [[menu.main]]
+    name = "关于"
+    url = "/about/"
+    weight = 3
+
+[params]
+  description = "使用Hugo搭建的个人博客"
+  author = "博主"
+  # 社交媒体链接
+  github = "https://github.com/yourusername"
+  # 可以添加更多社交媒体链接
+  
+  # 显示阅读时间
+  showReadingTime = true
+  
+  # 启用目录
+  toc = true
+  
+  # 启用代码高亮
+  [params.highlight]
+    style = "github"
+    languages = ["go", "python", "javascript"]

@@ -1,0 +1,37 @@
+{{ define "main" }}
+<div class="container">
+    <header class="list-header">
+        <h1 class="list-title">{{ .Title }}</h1>
+        {{ if .Description }}
+        <p class="list-description">{{ .Description }}</p>
+        {{ end }}
+    </header>
+    
+    <div class="posts-list">
+        {{ range .Pages }}
+        <article class="post-item">
+            <h2 class="post-item-title">
+                <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+            </h2>
+            <div class="post-item-meta">
+                <time>{{ .Date.Format "2006-01-02" }}</time>
+                {{ if .Params.categories }}
+                <span class="post-item-categories">
+                    分类：
+                    {{ range .Params.categories }}
+                    <a href="{{ "categories/" | relLangURL }}{{ . | urlize }}">{{ . }}</a>
+                    {{ end }}
+                </span>
+                {{ end }}
+            </div>
+            {{ if .Description }}
+            <div class="post-item-description">
+                {{ .Description }}
+            </div>
+            {{ end }}
+            <a href="{{ .RelPermalink }}" class="read-more">阅读全文 →</a>
+        </article>
+        {{ end }}
+    </div>
+</div>
+{{ end }}
