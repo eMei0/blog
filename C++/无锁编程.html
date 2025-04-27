@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C++并发编程高级指南：原子操作、内存序与伪共享</title>
+  <link href="https://fastly.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://fastly.jsdelivr.net/npm/framer-motion@10.12.4/dist/framer-motion.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+
+    :root {
+      --primary-gradient: linear-gradient(135deg, #1a2a6c, #b21f1f);
+      --code-gradient: linear-gradient(135deg, #2b3a4a, #445566);
+      --chart-gradient: linear-gradient(135deg, #E65D2E, #F3A183);
+    }
+
+    body {
+      font-family: 'Inter', 'Noto Sans SC', sans-serif;
+      overflow-x: hidden;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 1.5rem;
+    }
+
+    .mega-title {
+      font-size: clamp(2.5rem, 6vw, 5rem);
+      font-weight: 800;
+      line-height: 1;
+      background: linear-gradient(to right, #ffffff, #a5b4fc);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.5rem);
+      opacity: 0.7;
+      margin-top: 1rem;
+    }
+
+    .bento-card {
+      border-radius: 1.5rem;
+      padding: 2rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      position: relative;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .bento-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+    }
+
+    .gradient-bg-primary {
+      background: var(--primary-gradient);
+    }
+
+    .gradient-bg-code {
+      background: var(--code-gradient);
+    }
+
+    .gradient-bg-chart {
+      background: var(--chart-gradient);
+    }
+
+    .code-block {
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      font-family: 'Fira Code', monospace;
+      overflow-x: auto;
+      position: relative;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .fade-in {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .cache-line {
+      height: 64px;
+      border: 2px solid #4b5563;
+      border-radius: 8px;
+      position: relative;
+      margin: 20px 0;
+    }
+
+    .cache-block {
+      height: 100%;
+      border-right: 1px dashed #4b5563;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      color: white;
+    }
+
+    .cache-block:last-child {
+      border-right: none;
+    }
+
+    .thread {
+      width: 50px;
+      height: 50px;
+      background-color: #3b82f6;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      position: absolute;
+      transition: all 0.5s ease;
+      z-index: 10;
+    }
+
+    .memory-barrier {
+      height: 100%;
+      width: 4px;
+      background: linear-gradient(to bottom, #f87171, #f43f5e);
+      position: absolute;
+      z-index: 5;
+    }
+
+    .concept-title {
+      font-size: clamp(1.5rem, 3vw, 2.5rem);
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .tech-term {
+      font-style: italic;
+      color: #a5b4fc;
+      font-weight: 500;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1e293b;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #64748b;
+    }
+
+    .section-navigator {
+      position: fixed;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 100;
+    }
+
+    .nav-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: #475569;
+      margin: 1rem 0;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .nav-dot.active {
+      background-color: #f8fafc;
+      transform: scale(1.3);
+    }
+
+    @media (max-width: 768px) {
+      .bento-grid {
+        grid-template-columns: 1fr;
+      }
+      .section-navigator {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Hero Section -->
+  <section id="00b53bf4-eba3-4eac-b9a4-ad2612273427" class="min-h-screen flex items-center justify-center pt-20 pb-10 px-4 sm:px-6 lg:px-8 overflow-hidden">
+    <div id="263ef939-ad85-41c0-bc4a-0a32a8c6b38e" class="max-w-7xl w-full">
+      <h1 id="8dc595c7-459b-45b4-82da-d6bb1a38b70d" class="mega-title text-center">C++ 高性能并发编程</h1>
+      <p id="72e77537-b548-4537-ac8c-58d6cbd0a256" class="subtitle text-center mt-6 text-gray-300">探索<span class="tech-term">Atomic Operations</span>、<span class="tech-term">Memory Order</span>和<span class="tech-term">False Sharing</span>的深度原理</p>
+      <div id="e0621037-9c62-481a-ae69-fb6382bfe8ec" class="mt-12 flex justify-center">
+        <a id="ef244458-0871-4218-b44a-206542eef201" href="#overview" class="flex items-center justify-center animate-bounce">
+          <i id="1731e44a-f9b7-4a79-9651-be807b18c029" class="fas fa-chevron-down text-2xl text-gray-300"></i>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Overview -->
+  <section id="overview" class="py-20 px-4 sm:px-6 lg:px-8 min-h-screen flex items-center">
+    <div id="221a6dcd-d22b-49ce-b221-4986f0a3d21a" class="max-w-7xl mx-auto">
+      <div id="a676a19f-5a03-4c2b-8b27-97f9ddb71c5e" class="bento-grid">
+        <!-- Overview Card -->
+        <div id="74bd583f-2bfb-4f44-a167-9f31c17dcc11" class="bento-card gradient-bg-primary col-span-12 md:col-span-8 fade-in">
+          <h2 id="f7ec12d3-5e96-442f-897e-1030c5850e7b" class="concept-title">现代C++并发编程的基石</h2>
+          <p id="2813102b-50bc-42d3-ab7a-f9035efed766" class="mb-4">随着多核处理器的普及，高效的并发编程变得至关重要。C++11及更高版本引入了原子操作、内存序和线程支持库，为开发者提供了构建高性能无锁并发程序的工具。</p>
+          <p id="c971dd76-3bfc-400c-8c77-e44c13cf338c">本指南将深入探讨原子操作的原理、不同内存序模型的特性以及如何避免伪共享等常见性能陷阱，帮助您掌握现代C++并发编程的核心概念。</p>
+        </div>
+        
+        <!-- Navigation Card -->
+        <div id="2c4a37e6-aa68-4724-a407-3ee0004cd81f" class="bento-card col-span-12 md:col-span-4 bg-gray-900 fade-in">
+          <h3 id="8dad2ec9-031a-4568-9d44-7b7e0e833d04" class="text-xl font-semibold mb-4">核心内容</h3>
+          <ul id="8de531b1-d6ca-4553-abb8-a45732078817" class="space-y-3">
+            <li id="ef65fa41-d686-40fe-a761-359b005ffdef" class="flex items-center">
+              <i id="11175829-d571-43b3-b5cb-1a8e85a0fad2" class="fas fa-atom text-blue-400 mr-3"></i>
+              <span id="c31c0e48-dbed-4928-a27b-d7b2455c3f14">原子操作 <span class="text-sm text-gray-400">Atomic Operations</span></span>
+            </li>
+            <li id="82d96a06-447c-4e41-9382-661b68b6ab74" class="flex items-center">
+              <i id="66462e7a-c4b5-43da-9b5e-9c521264f07b" class="fas fa-sort-amount-up text-green-400 mr-3"></i>
+              <span id="7b67a5ca-4b2a-4f27-8553-c53329880d08">内存序 <span class="text-sm text-gray-400">Memory Order</span></span>
+            </li>
+            <li id="84fc6081-a254-48cf-a88d-3ed65e03cf01" class="flex items-center">
+              <i id="1e2a9fb2-55fc-4957-a380-3a1f3acde0bb" class="fas fa-stream text-yellow-400 mr-3"></i>
+              <span id="82514a9f-01a5-4e34-93f1-993beb71826b">无锁队列 <span class="text-sm text-gray-400">Lock-Free Queues</span></span>
+            </li>
+            <li id="f2f79f56-7579-4ec9-aa13-a376e88f04f7" class="flex items-center">
+              <i id="92b94679-67e4-4cf7-90a2-9c90638c7d78" class="fas fa-microchip text-red-400 mr-3"></i>
+              <span id="4f9c3613-46e0-4f0f-8cb2-b7a0f8faffa2">伪共享 <span class="text-sm text-gray-400">False Sharing</span></span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 原子操作 Section -->
+  <section id="atomic-operations" class="py-20 px-4 sm:px-6 lg:px-8 min-h-screen">
+    <div id="35d9e641-c184-483e-b7f0-118c4ccd64cf" class="max-w-7xl mx-auto">
+      <h2 id="5be8c451-1989-4dfc-9f19-4fa3940c49db" class="mega-title mb-20 text-center">原子操作</h2>
+      
+      <div id="2a04c1e0-c49b-4831-ad3e-ea39c1e0ef15" class="bento-grid">
+        <!-- 原子操作概述 -->
+        <div id="816cd124-f4a9-4e95-aecc-c8894464ebc2" class="bento-card gradient-bg-primary col-span-12 md:col-span-6 fade-in">
+          <h3 id="36f399c8-3b08-4ee8-839a-a3d09677708d" class="concept-title">原子操作概述</h3>
+          <p id="d103da1e-2c1d-4f43-b334-d93888055cea" class="mb-4">
+            <strong>原子操作</strong>是在多线程环境中不会被线程调度机制中断的操作单元。它们具有三个关键特性：
+          </p>
+          <ul id="5c961b18-335d-4bbf-82c5-3cc93bbb2342" class="list-disc list-inside space-y-2 pl-4 mb-4">
+            <li id="703acff1-5150-4cbd-b6c5-1cb1587e0bd7"><strong>不可分割性</strong>：操作要么完全执行，要么根本不执行</li>
+            <li id="17d89355-939d-4a3c-8017-4b2c78b00ef3"><strong>可见性</strong>：一个线程对原子变量的修改对其他线程立即可见</li>
+            <li id="45e9e4e6-a72c-4955-8a6b-cd91565cc3d0"><strong>无中间状态</strong>：其他线程不会观察到部分完成的状态</li>
+          </ul>
+          <p id="9ca689cb-d1bc-4cf7-90a4-e341a8be0c54">与传统锁机制相比，原子操作通常能提供更好的性能，特别是在争用较低的情况下，因为它们避免了线程阻塞和上下文切换的开销。</p>
+        </div>
+
+        <!-- 原子操作vs非原子操作 -->
+        <div id="e5f6ed7e-f1e7-441f-bc98-e428517b96b9" class="bento-card gradient-bg-chart col-span-12 md:col-span-6 fade-in">
+          <h3 id="e10000c6-492e-42f2-aa98-affd2fe78620" class="concept-title">原子操作 vs 非原子操作</h3>
+          <div id="atomic-vs-non-atomic" class="w-full h-64 bg-gray-900 rounded-lg relative overflow-hidden p-4">
+            <!-- 图表在JS中生成 -->
+            <div id="1dc470c8-7c8a-4f0f-8b58-d31d27c2cfa0" class="absolute top-4 left-4 z-10">
+              <div id="a6e0a7d8-d6d9-4038-960c-6e3173c1c72d" class="mb-3 flex items-center">
+                <div id="7f75658c-f2ac-47cd-b6ed-f06c5823e2a1" class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                <span id="638c575f-c97a-4b86-9969-1ec5d21f711c" class="text-sm">原子操作</span>
+              </div>
+              <div id="dca12c5d-9f3f-4317-a67a-3d51618e47ad" class="flex items-center">
+                <div id="02dc8e90-463f-4c7b-be4e-9c8664c690ab" class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+                <span id="63ef2259-8a53-43e0-a590-46c24772288c" class="text-sm">非原子操作</span>
+              </div>
+            </div>
+            <div id="atomic-visualization" class="h-full w-full"></div>
+          </div>
+          <p id="4ec1d879-0ae7-4443-b197-bf795c043959" class="mt-4 text-center text-sm">
+            原子操作保证操作的完整性，而非原子操作在多线程环境中可能导致数据竞争
+          </p>
+        </div>
+
+        <!-- C++中的原子类型 -->
+        <div id="3a3ffa35-0dcd-465d-858b-f11d1decd4a4" class="bento-card gradient-bg-code col-span-12 fade-in">
+          <h3 id="bb9a4eed-f598-4233-ad0a-f97b5bff7313" class="concept-title">C++中的原子类型</h3>
+          <p id="55c2b629-f1e7-482f-b837-caa829de8d70" class="mb-4">
+            C++11引入了<span class="tech-term">std::atomic&lt;T&gt;</span>模板类，提供了一系列针对并发编程的原子操作。这个模板适用于任何平凡可复制类型，包括内置类型和某些用户定义类型。
+          </p>
+          
+          <div id="c50e8fa9-7af4-4db9-826a-4c42aeba7de5" class="code-block mb-6">
+            <pre id="5aa635ed-58e3-4b50-8770-22f434accda0"><code>// 原子类型基本用法
+#include &lt;atomic&gt;
+#include &lt;thread&gt;
+#include &lt;iostream&gt;
+
+std::atomic&lt;int&gt; counter(0);  // 初始化为0的原子整型
+
+void increment_counter() {
+    for (int i = 0; i < 1000; ++i) {
+        counter++;  // 原子自增操作
+    }
+}
+
+int main() {
+    std::thread t1(increment_counter);
+    std::thread t2(increment_counter);
+    
+    t1.join();
+    t2.join();
+    
+    std::cout << "Counter value: " << counter.load() << std::endl;  // 总是输出2000
+    return 0;
+}</code></pre>
+          </div>
+
+          <div id="a2aed248-d036-4e68-b22f-a61976cf67d9" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div id="31dd6cca-9d3d-4947-b034-deaa27760af8">
+              <h4 id="79d3f6e6-6f1d-4e8e-9e62-a9d9c50c2b47" class="text-xl font-semibold mb-2">核心原子操作API</h4>
+              <ul id="3c3ba2c7-315a-460d-98ff-1a6cbeb77b61" class="list-disc list-inside space-y-1 pl-4">
+                <li id="1320d2b1-2bd7-42b2-a980-e3baa8043342"><code>load()</code>：原子地获取存储的值</li>
+                <li id="6ecb7494-9efe-4d04-86b4-6a0f725f16c2"><code>store()</code>：原子地替换存储的值</li>
+                <li id="75913fa4-c273-4a16-aed8-2603f12b3e5c"><code>exchange()</code>：原子地替换并返回之前的值</li>
+                <li id="73834bcf-1b5c-49b7-aba2-ddea40d69615"><code>compare_exchange_weak/strong()</code>：比较并交换操作</li>
+                <li id="96c481e1-c5d6-4ff1-8c29-ec6db543ea8e"><code>fetch_add()/fetch_sub()</code>：原子加/减并返回之前的值</li>
+                <li id="320ecf88-6372-4713-b0e6-969960da9a34"><code>++/--</code>操作符：原子自增/自减</li>
+              </ul>
+            </div>
+            <div id="4e6df749-513b-499b-a0fe-ec9db5bcd65a">
+              <h4 id="2ffc0eb9-f12f-4cd4-af16-976875b50622" class="text-xl font-semibold mb-2">核心特性</h4>
+              <ul id="20d55858-5d8b-4d0e-9f4f-fc4179727099" class="list-disc list-inside space-y-1 pl-4">
+                <li id="af417139-aa05-4cda-addb-35772b2c566b"><code>is_lock_free()</code>：检查原子操作是否无锁实现</li>
+                <li id="b37819f7-f5a4-4c78-a8d4-908a0ee60b82">不允许拷贝和赋值（只能通过atomic API修改）</li>
+                <li id="f80e984e-ef1e-44cd-b776-db3e9417df3f">支持各种内存序模型（下一节详述）</li>
+                <li id="89123df5-7b1e-4d3d-9a26-5d66b0ccaa26">为基本类型提供特化实现以提高性能</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 内存序 Section -->
+  <section id="memory-order" class="py-20 px-4 sm:px-6 lg:px-8 min-h-screen">
+    <div id="ee928ca9-c87f-4b10-b713-cf67cd867c57" class="max-w-7xl mx-auto">
+      <h2 id="7dc04a77-a9ff-47f6-af88-3cf009079fe3" class="mega-title mb-20 text-center">内存序</h2>
+      
+      <div id="b09a8943-1c30-49ff-8c5f-bfa4e25fdbb4" class="bento-grid">
+        <!-- 内存序概述 -->
+        <div id="7384228d-2585-4945-98bf-6c23c113c876" class="bento-card gradient-bg-primary col-span-12 fade-in">
+          <h3 id="73c70f43-cff6-47c4-8c5e-40489705faea" class="concept-title">内存序（Memory Order）详解</h3>
+          <p id="8c0568c7-57ab-4558-930a-c28f8f3ddd64" class="mb-4">
+            在多处理器系统中，不同CPU核心可能会以不同于程序中指定的顺序执行指令（乱序执行）。<span class="tech-term">内存序</span>定义了原子操作之间以及原子操作与非原子操作之间的可见性和顺序约束。
+          </p>
+          <p id="3cd2adfa-6d64-4594-855b-074e48a84cfc">
+            C++提供了六种内存序选项，允许开发者在性能和安全保证之间做出权衡。选择正确的内存序对于确保程序正确性和优化性能至关重要。
+          </p>
+        </div>
+
+        <!-- 内存序模型 -->
+        <div id="6966c475-a9e7-47e1-a7a5-7eb8e2a3022e" class="bento-card bg-gray-900 col-span-12 md:col-span-5 fade-in">
+          <h3 id="23f9a367-50a2-41c4-a1f1-c8a826541d27" class="concept-title">内存序模型</h3>
+          <div id="43ab37f6-3b91-4bb4-8cba-b78860c50faa" class="space-y-4">
+            <div id="3ce247ef-7131-4f8d-827c-800648de24cb" class="p-4 bg-gray-800 rounded-lg">
+              <h4 id="c0b80ef3-1f29-43d0-b142-58dcb85174b1" class="text-lg font-semibold text-red-300">松散序（Relaxed Ordering）</h4>
+              <p id="fa78b72a-2e54-43e1-ae4d-c8ab38591067" class="text-sm mt-1"><code>memory_order_relaxed</code></p>
+              <p id="e9de5673-0c25-43fa-b7db-089588c0e3f4" class="mt-2">仅保证原子性，不提供同步或顺序保证。只能保证该原子变量自身的修改顺序一致性。</p>
+            </div>
+
+            <div id="06d06dcb-3245-49ca-80d9-b2d65b83802b" class="p-4 bg-gray-800 rounded-lg">
+              <h4 id="413b9008-c0b4-48e5-a387-8341bcb3f3b8" class="text-lg font-semibold text-yellow-300">获取-释放序（Acquire-Release Ordering）</h4>
+              <p id="0fe01d5c-8cfa-4cfe-9ebb-3e436885edd1" class="text-sm mt-1"><code>memory_order_acquire</code>, <code>memory_order_release</code>, <code>memory_order_acq_rel</code></p>
+              <p id="f061f589-fd28-47f5-93d3-ac4d5040881f" class="mt-2">提供单向同步，确保release操作之前的所有内存写入对执行acquire操作的线程可见。</p>
+            </div>
+
+            <div id="8931e8ca-af81-457c-a21f-8a927972d519" class="p-4 bg-gray-800 rounded-lg">
+              <h4 id="c5d872f9-406f-4eee-a9bd-bc1f4f2e4ec0" class="text-lg font-semibold text-green-300">顺序一致性（Sequential Consistency）</h4>
+              <p id="2c926db6-8d79-4f42-9b44-240a55331727" class="text-sm mt-1"><code>memory_order_seq_cst</code></p>
+              <p id="f2f3b94b-37c4-4364-9e57-97810d0cd8a3" class="mt-2">最严格的内存序，提供全局一致的顺序。所有操作看起来都按照程序指定的顺序执行。是原子操作的默认内存序。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 内存序关系图 -->
+        <div id="e77e880e-fe77-4d8c-af0f-66eeeacc235c" class="bento-card gradient-bg-chart col-span-12 md:col-span-7 fade-in">
+          <h3 id="536cad1c-e41a-4637-a2f3-bb201570dcc9" class="concept-title">内存序关系与强度</h3>
+          <div id="memory-order-chart" class="h-72 bg-gray-900 rounded-lg p-4 relative">
+            <!-- 图表在JS中生成 -->
+            <div id="memory-order-visualization" class="h-full w-full"></div>
+          </div>
+          <div id="00377517-5b38-4e30-98aa-99afbb691dbe" class="mt-4 text-sm">
+            <p id="3a589f05-7e41-49df-a1dd-28170aa5658c" class="mb-2 text-center">内存序强度从左到右增加，同时性能开销也随之增加</p>
+            <div id="632c82a0-ab2f-46cd-8fb8-c50157c3e76d" class="grid grid-cols-3 gap-2 text-center">
+              <div id="953f6158-a72c-4505-ba95-8da037ad6795">
+                <span id="71e34679-ddb7-4836-83be-c842c8f0a218" class="text-red-300 font-bold">Relaxed</span>
+                <p id="dd9c6b9a-b3df-4672-aa15-a94d31d22023" class="text-xs">最高性能，最少保证</p>
+              </div>
+              <div id="67a9d1af-218c-48aa-8bf0-999b60d9463f">
+                <span id="cd6c1e41-c307-496c-ab67-93bda4b15981" class="text-yellow-300 font-bold">Acquire-Release</span>
+                <p id="cf183fcb-cf05-4e25-8bb5-f113f4645e70" class="text-xs">平衡的性能与同步</p>
+              </div>
+              <div id="4fa822cc-2fb2-4261-9191-d16891223209">
+                <span id="4acf50ae-ee61-4ae3-8e75-96dacaf36643" class="text-green-300 font-bold">Sequential</span>
+                <p id="fa622db6-c19f-4371-8f79-e2ff27e8f3fd" class="text-xs">强一致性，较低性能</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 内存序代码示例 -->
+        <div id="6feb5eb8-6608-402c-9a97-0f9df6ebfca5" class="bento-card gradient-bg-code col-span-12 fade-in">
+          <h3 id="5a241539-fdb5-4eda-9ff9-e265daba239e" class="concept-title">内存序代码示例</h3>
+          <div id="9a641c4a-6033-4ae5-ba03-4aaee06b6483" class="code-block mb-6">
+            <pre id="5e201718-4b85-4f61-878a-8b096e35228d"><code>#include &lt;atomic&gt;
+#include &lt;thread&gt;
+#include &lt;iostream&gt;
+
+std::atomic&lt;bool&gt; x, y;
+std::atomic&lt;int&gt; z;
+
+// 松散序示例 - 不保证操作顺序
+void relaxed_example() {
+    x.store(true, std::memory_order_relaxed);
+    y.store(true, std::memory_order_relaxed);
+}
+
+// 获取-释放序示例 - 建立同步点
+void release_example() {
+    x.store(true, std::memory_order_relaxed);  // 1. 先设置x
+    z.store(42, std::memory_order_release);    // 2. 释放z，确保x的写入可见
+}
+
+void acquire_example() {
+    if (z.load(std::memory_order_acquire) == 42) {  // 3. 获取z
+        // 如果z是42，那么x的写入在这里一定可见
+        if (x.load(std::memory_order_relaxed)) {    // 4. 一定能看到x的变化
+            // 这里会执行
+        }
+    }
+}
+
+// 顺序一致性示例 - 全局一致顺序
+void sequential_example() {
+    x.store(true, std::memory_order_seq_cst);  // 全局可见的写入
+    y.store(true, std::memory_order_seq_cst);  // 全局可见的写入
+}</code></pre>
+          </div>
+
+          <div id="4be66492-7f34-45fd-b84d-dceef39a27df" class="bg-gray-800 p-4 rounded-lg">
+            <h4 id="1aee7964-8865-45f5-b290-459d2c3ca0c0" class="text-lg font-semibold mb-2">内存栅栏</h4>
+            <p id="029f0452-6fa9-454b-8868-777715d9ea99" class="mb-4">
+              除了针对单个原子操作的内存序外，C++还提供了<span class="tech-term">atomic_thread_fence</span>函数，它在没有实际读写操作的情况下创建内存屏障：
+            </p>
+            <pre id="63f3d3e1-708a-424c-98df-34ab5ce2484c" class="text-sm"><code>// 在当前线程中建立acquire内存栅栏
+std::atomic_thread_fence(std::memory_order_acquire);
+
+// 在当前线程中建立release内存栅栏
+std::atomic_thread_fence(std::memory_order_release);</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 无锁队列 Section -->
+  <section id="lock-free-queue" class="py-20 px-4 sm:px-6 lg:px-8 min-h-screen">
+    <div id="a81a7bf8-312a-4eee-a632-4d1149679f36" class="max-w-7xl mx-auto">
+      <h2 id="de4c3580-9bcb-4496-a1f4-4bff6a709ad4" class="mega-title mb-20 text-center">无锁队列</h2>
+      
+      <div id="0ebb4fba-1cf6-49c7-8932-bacd9394d266" class="bento-grid">
+        <!-- 无锁队列概述 -->
+        <div id="c4164a9a-5903-4050-b70a-b76a9c066173" class="bento-card gradient-bg-primary col-span-12 fade-in">
+          <h3 id="f55abc3c-9724-40bd-ac06-5c97870acc9d" class="concept-title">无锁队列的基础知识</h3>
+          <p id="854be133-701c-42e4-9d43-eb84fbad8080" class="mb-4">
+            <span class="tech-term">无锁队列</span>是一种不使用互斥锁，而是依赖原子操作和精心设计的算法来实现线程安全的数据结构。它们主要有以下优势：
+          </p>
+          <div id="c81bfbc7-5cce-4c9a-926d-557b795d35f7" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div id="30ba9a4d-977c-4375-b248-49d82c63a834">
+              <h4 id="fbad0ba0-7d9d-4a77-8064-58c53da7a91c" class="text-xl font-semibold mb-2">优势</h4>
+              <ul id="357893f3-0ad4-4081-a157-759b2334de7b" class="list-disc list-inside space-y-1 pl-4">
+                <li id="2bd78dbd-305e-4788-8d6f-f0bba4186fa0">无死锁风险</li>
+                <li id="b499ca60-778c-426a-81e3-c84c89f668ba">优秀的并发性能</li>
+                <li id="46a89a3f-ef88-4c75-81fb-06c7ab3bf5a5">避免线程阻塞和上下文切换</li>
+                <li id="960e4d01-ba0d-4211-a950-5d1afc84fa9a">提高系统吞吐量</li>
+                <li id="15285a11-c267-4eb9-847e-3575611c4a72">降低延迟</li>
+              </ul>
+            </div>
+            <div id="5dc50ccf-ac1c-4810-9db9-732c31fcc8fb">
+              <h4 id="9bf8993b-9937-4112-81d4-6d06b3d87fac" class="text-xl font-semibold mb-2">挑战</h4>
+              <ul id="55ad6b77-8869-4ea3-a905-eede85bcc3c0" class="list-disc list-inside space-y-1 pl-4">
+                <li id="cd13d78e-f1c9-4b6a-b9b3-b83b67e00622">实现复杂</li>
+                <li id="40e34b7c-15aa-48d4-81f5-398a70d071e5">正确性难以验证</li>
+                <li id="41c159be-6f7b-493c-9bf7-57f03e22fa3b">内存管理更复杂</li>
+                <li id="453a7fd4-76ae-479e-8b15-1e8e5ed42040">ABA问题</li>
+                <li id="9ebd7a7c-904f-4008-ab21-5a90bef500ab">平台相关的内存模型差异</li>
+              </ul>
+            </div>
+          </div>
+          <p id="6072cbe9-26a5-4c46-963c-aea1f7c87b6e">
+            无锁队列常见于高性能计算、实时系统、游戏引擎和金融交易系统等对延迟敏感的应用领域。
+          </p>
+        </div>
+
+        <!-- 无锁队列实现 -->
+        <div id="da8a5a9d-e9d0-46a7-bf9c-76f93b1e8fb2" class="bento-card gradient-bg-code col-span-12 fade-in">
+          <h3 id="7e4ba335-1361-46b4-9d62-6729733e187c" class="concept-title">无锁队列实现</h3>
+          <div id="9be0f5ef-38f7-4100-b49b-88a3a2f21f46" class="code-block mb-6">
+            <pre id="a7638a05-53c9-41fa-8e85-46aa1e72bce4"><code>// 无锁队列实现片段
+#include &lt;atomic&gt;
+#include &lt;memory&gt;
+
+template&lt;typename T&gt;
+class LockFreeQueue {
+private:
+    struct Node {
+        std::shared_ptr&lt;T&gt; data;
+        std::atomic&lt;Node*&gt; next;
+        Node() : next(nullptr) {}
+    };
+    
+    std::atomic&lt;Node*&gt; head;
+    std::atomic&lt;Node*&gt; tail;
+
+public:
+    LockFreeQueue() {
+        // 初始化一个哨兵节点
+        Node* dummy = new Node;
+        head.store(dummy);
+        tail.store(dummy);
+    }
+    
+    // 入队操作
+    void enqueue(T value) {
+        // 创建一个装有数据的新节点
+        std::shared_ptr&lt;T&gt; new_data(std::make_shared&lt;T&gt;(std::move(value)));
+        Node* new_node = new Node;
+        new_node->data = new_data;
+        
+        // 获取当前尾指针
+        Node* old_tail = tail.load();
+        Node* nullptr_node = nullptr;
+        
+        // 循环直到成功将新节点链接到队列
+        while (!old_tail->next.compare_exchange_weak(
+            nullptr_node, new_node,
+            std::memory_order_release,
+            std::memory_order_relaxed)) {
+            // 如果CAS失败，更新tail和重置nullptr_node
+            old_tail = tail.load();
+            nullptr_node = nullptr;
+        }
+        
+        // 尝试更新尾指针
+        tail.compare_exchange_strong(old_tail, new_node);
+    }
+    
+    // 出队操作
+    bool dequeue(T& result) {
+        Node* old_head = head.load();
+        
+        // 循环直到成功弹出节点或队列为空
+        while (old_head != tail.load()) {
+            Node* next = old_head->next.load();
+            if (next == nullptr) {
+                // 队列为空
+                return false;
+            }
+            
+            // 尝试更新头指针
+            if (head.compare_exchange_strong(old_head, next)) {
+                // 成功更新头指针，取出值
+                result = *(next->data);
+                delete old_head;  // 释放旧的头节点
+                return true;
+            }
+        }
+        
+        // 队列为空
+        return false;
+    }
+    
+    // 析构函数和其他必要方法省略...
+};</code></pre>
+          </div>
+          
+          <div id="0064c88c-ac0e-4bd4-adb5-4def10e05258">
+            <h4 id="c229f642-d81b-4f3a-aad6-be2db315c10e" class="text-xl font-semibold mb-2">关键技术点</h4>
+            <div id="6d1ba35e-8a2d-4cad-a00a-6e54ec8d916c" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div id="358f3267-49df-4868-b295-169e9cd3f98e">
+                <h5 id="72ee8f01-8e9a-4500-b82f-d6dd08e54d9c" class="font-semibold text-blue-300">比较并交换（CAS）操作</h5>
+                <p id="163c9d9f-5618-44a9-bf0f-43ab75e23699" class="text-sm mt-1">
+                  CAS是无锁编程的核心原语，通过<code>compare_exchange_weak/strong</code>方法实现。它在更新值之前先检查该值是否与预期相同，避免竞争条件。
+                </p>
+              </div>
+              <div id="b9507ad9-75a8-4a1b-8574-eaaebbd079e8">
+                <h5 id="add13bf6-dc41-4d69-80e0-b5e932a72abb" class="font-semibold text-blue-300">ABA问题</h5>
+                <p id="3d8b5792-b744-42a0-a08c-dd385c1ab783" class="text-sm mt-1">
+                  当一个值从A变为B再变回A，CAS操作会认为值没变，但实际上可能有重要的中间状态。解决方案包括使用带版本号的指针或风险指针。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 无锁队列图示 -->
+        <div id="6ca08555-aa78-4152-a2ce-8ff53e235ea1" class="bento-card gradient-bg-chart col-span-12 md:col-span-6 fade-in">
+          <h3 id="8dd5e73d-8f0a-475a-b44c-55d04cb261fd" class="concept-title">无锁队列操作图解</h3>
+          <div id="lockfree-queue-diagram" class="h-64 bg-gray-900 rounded-lg p-4 relative">
+            <!-- 图表在JS中生成 -->
+          </div>
+          <p id="b40e6529-ba5d-4c00-a339-ed2ff0634480" class="mt-4 text-center text-sm">
+            无锁队列通过原子更新头尾指针，并使用CAS操作确保线程安全
+          </p>
+        </div>
+
+        <!-- 无锁编程实践 -->
+        <div id="31a0cef9-b48c-4177-919a-de616e45defc" class="bento-card bg-gray-900 col-span-12 md:col-span-6 fade-in">
+          <h3 id="02bec73a-4fb9-4ac1-9c9c-59c9718ee55c" class="concept-title">无锁编程最佳实践</h3>
+          <ul id="749bdb21-db40-4fd1-b5c4-be67a94aa186" class="space-y-4">
+            <li id="c1d47356-3743-440e-b850-125c696887d6" class="flex">
+              <i id="7509024d-b571-406f-8ee9-c2fa14177c49" class="fas fa-check-circle text-green-400 mt-1 mr-3"></i>
+              <div id="6b9fcb09-c90f-44c7-ab6e-5168317e307b">
+                <h4 id="274fb81b-4119-49ec-9fef-aeeda0b52f50" class="font-semibold">谨慎选择内存序</h4>
+                <p id="9de48e72-2c4a-4c75-a774-383c582fae25" class="text-sm">根据实际需求选择适当的内存序，避免过度同步带来的性能损失。</p>
+              </div>
+            </li>
+            <li id="cc830e44-dbb9-4f75-9435-b6e9009e329e" class="flex">
+              <i id="233eedea-fb24-412d-ac9a-d23e3c0a3e84" class="fas fa-check-circle text-green-400 mt-1 mr-3"></i>
+              <div id="88499bb5-fa22-4354-af25-08ae888a23cb">
+                <h4 id="f5b52787-b960-40dc-b6ba-a18f5081301e" class="font-semibold">考虑内存管理问题</h4>
+                <p id="3c164d25-c996-4ca5-a88c-0cf9401826a2" class="text-sm">使用适当的内存回收技术，如风险指针或询问计数，防止内存泄漏和UAF问题。</p>
+              </div>
+            </li>
+            <li id="e212618d-e5e9-42f8-b613-9dd4837af567" class="flex">
+              <i id="9eba77c3-f60d-497f-8716-fd9d82a1e39d" class="fas fa-check-circle text-green-400 mt-1 mr-3"></i>
+              <div id="7fbda5b7-eb14-4175-8d1b-45ab538541ab">
+                <h4 id="8ba48e1c-dfa7-4331-ae1a-6e2150033519" class="font-semibold">全面测试</h4>
+                <p id="2568d5b3-bdfe-4174-bb0a-ae87d2e9c7f9" class="text-sm">使用压力测试和竞争检测工具验证实现的正确性和性能。</p>
+              </div>
+            </li>
+            <li id="2237e749-8683-48bc-8356-4ca54fddf8b0" class="flex">
+              <i id="f5d15a95-9780-4247-9652-8b7346019fd6" class="fas fa-check-circle text-green-400 mt-1 mr-3"></i>
+              <div id="13b67e96-d8b4-450e-a2c0-c14b9be8a424">
+                <h4 id="50fa1b81-d500-474f-a48a-51b312487c21" class="font-semibold">平台兼容性</h4>
+                <p id="50caa4fc-c627-41af-a382-17b6d12ac977" class="text-sm">考虑不同硬件架构和编译器对内存模型的支持差异。</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 伪共享 Section -->
+  <section id="false-sharing" class="py-20 px-4 sm:px-6 lg:px-8 min-h-screen">
+    <div id="7a1e5b60-a9f3-44fc-93ab-2f9175963029" class="max-w-7xl mx-auto">
+      <h2 id="a9faa868-7322-406b-b21a-f7960dec49fb" class="mega-title mb-20 text-center">伪共享</h2>
+      
+      <div id="47a6010a-eeb3-4ba5-9c1e-6314fb86c449" class="bento-grid">
+        <!-- 伪共享概述 -->
+        <div id="c1210e5e-e89a-4019-8198-32381cea29e6" class="bento-card gradient-bg-primary col-span-12 fade-in">
+          <h3 id="b6e735a4-ce9d-4ec9-8823-dc096c48c4f0" class="concept-title">伪共享（False Sharing）问题详解</h3>
+          <p id="c3f4c279-fc01-42a2-b663-45910b5b8d42" class="mb-4">
+            <span class="tech-term">伪共享</span>是现代多核处理器中一种常见但隐蔽的性能杀手，源于CPU缓存系统的工作方式。当多个线程修改同一缓存行（Cache Line）中的不同变量时，会导致严重的缓存一致性流量，进而严重降低并发性能。
+          </p>
+          <div id="f65db322-d05b-4fc9-a275-e5e84489619c" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div id="b0275b80-31ee-45bb-9fb8-17fc12345198">
+              <h4 id="570916db-faf0-46c0-9797-2163917b629c" class="text-xl font-semibold mb-2">缓存行基础</h4>
+              <p id="a1c61a39-4b2f-4cb7-a314-fbd27c29230e">
+                缓存行是CPU缓存中的最小操作单位，通常为64字节。处理器不会直接读写单个字节，而是一次性加载或写回整个缓存行。
+              </p>
+              <p id="bedb7f46-acbb-422f-9e71-3405c3132825" class="mt-2">
+                这种机制在单线程环境下可提高数据访问性能，但在多线程环境中可能导致问题。
+              </p>
+            </div>
+            <div id="182ee0a9-1e31-4f86-9399-72a15264e4bd">
+              <h4 id="d6878ab4-5137-4e23-99c4-9a46e6629831" class="text-xl font-semibold mb-2">伪共享产生原因</h4>
+              <p id="0c457997-045a-477a-a2af-58bee6c4f8b6">
+                当多个线程频繁修改位于同一缓存行的不同变量时，尽管它们操作的是不同数据，但因为共享缓存行，每次修改都会导致整个缓存行在所有CPU核心间同步。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 伪共享图示 -->
+        <div id="36b22bde-87ec-4978-bac9-036d17eb3170" class="bento-card gradient-bg-chart col-span-12 fade-in">
+          <h3 id="7f3e910b-1b4a-4e91-a1b4-002fa25a2c40" class="concept-title">伪共享示意图</h3>
+          <div id="false-sharing-diagram" class="w-full h-72 bg-gray-900 rounded-lg p-4 relative">
+            <!-- 图表在JS中生成 -->
+            <div id="cacheline-visualization" class="h-full w-full"></div>
+          </div>
+          <p id="b53a5c7b-9acb-43f7-8a67-50a79c6ca5c9" class="mt-4 text-center text-sm">
+            当两个线程频繁修改同一缓存行中的不同变量时，会导致大量的缓存同步通信
+          </p>
+        </div>
+
+        <!-- 避免伪共享 -->
+        <div id="ec7546ba-6828-43b5-9214-975fbe7d3a02" class="bento-card gradient-bg-code col-span-12 md:col-span-6 fade-in">
+          <h3 id="559c9cda-13cb-49e3-9a41-e30db56493f2" class="concept-title">避免伪共享的方法</h3>
+          <div id="e4365855-e18f-4236-84e0-846cd42fc62a" class="code-block mb-6">
+            <pre id="50c71e13-ebd5-4424-976d-ca1326f68370"><code>// 避免伪共享的C++实现
+#include &lt;atomic&gt;
+
+// 使用填充技术避免伪共享
+struct alignas(64) PaddedCounter {
+    std::atomic&lt;int&gt; value;
+    char padding[64 - sizeof(std::atomic&lt;int&gt;)];
+    
+    PaddedCounter() : value(0) {}
+    
+    void increment() {
+        value.fetch_add(1, std::memory_order_relaxed);
+    }
+    
+    int get() const {
+        return value.load(std::memory_order_relaxed);
+    }
+};
+
+// C++17 以后可以使用硬件破坏缓存行
+struct alignas(64) ModernPaddedCounter {
+    std::atomic&lt;int&gt; value;
+    
+    ModernPaddedCounter() : value(0) {}
+    
+    void increment() {
+        value.fetch_add(1, std::memory_order_relaxed);
+    }
+    
+    int get() const {
+        return value.load(std::memory_order_relaxed);
+    }
+};
+
+// 使用数组时避免伪共享的示例
+constexpr size_t CACHE_LINE_SIZE = 64;
+constexpr size_t COUNTER_COUNT = 8;
+
+// 不好的实现 - 可能导致伪共享
+std::atomic&lt;int&gt; bad_counters[COUNTER_COUNT];
+
+// 好的实现 - 避免伪共享
+alignas(CACHE_LINE_SIZE) std::atomic&lt;int&gt; good_counters[COUNTER_COUNT][CACHE_LINE_SIZE/sizeof(std::atomic&lt;int&gt;)];</code></pre>
+          </div>
+        </div>
+
+        <!-- 填充技术对比 -->
+        <div id="596eb672-5639-4507-a8c3-ff04a6db038a" class="bento-card bg-gray-900 col-span-12 md:col-span-6 fade-in">
+          <h3 id="1c1839d8-7bdf-4b10-9959-9561c8a04405" class="concept-title">填充（Padding）技术与性能对比</h3>
+          <div id="padding-comparison-chart" class="h-64 bg-gray-800 rounded-lg p-4 mb-4">
+            <!-- 图表在JS中生成 -->
+          </div>
+          <div id="c4eae72d-2dec-4b20-916d-e8d88031724d" class="grid grid-cols-3 gap-2 text-center text-sm">
+            <div id="1da656a9-809e-4577-93a2-714410e1cf0a">
+              <span id="9f61713d-0c68-4e8b-9702-d48fef914f0a" class="font-bold">无填充</span>
+              <p id="1a3aa697-254f-4348-aa1e-67dfce8f0372" class="text-xs text-gray-400">性能较低，伪共享严重</p>
+            </div>
+            <div id="d5b4e25e-4af3-4629-82cb-f4eee560142b">
+              <span id="c87e5d53-8a6a-4b4a-8abb-752f677f123a" class="font-bold">手动填充</span>
+              <p id="6b005529-056f-4e33-ae52-91a84c636dc2" class="text-xs text-gray-400">性能明显提升</p>
+            </div>
+            <div id="c8f6e856-3164-467a-bcca-de91c0462453">
+              <span id="68e8b159-fd18-4bed-aa10-9c36e59dfa3e" class="font-bold">缓存行对齐</span>
+              <p id="dab14562-e092-43c1-b9b3-f6c27c577097" class="text-xs text-gray-400">性能最佳</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 伪共享检测和最佳实践 -->
+        <div id="47ecf771-3180-47dc-9e2f-9a00e5948cfb" class="bento-card col-span-12 fade-in">
+          <h3 id="6eba9e42-e3d8-4a8b-b7e9-5899997b4e34" class="concept-title">伪共享检测与最佳实践</h3>
+          <div id="f529d5e8-af6e-43a7-a713-75b1e8d15033" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div id="7749a9f9-0d96-483c-8ad0-11cc3d3c228e" class="bg-gray-800 p-4 rounded-lg">
+              <h4 id="8782e5b3-903e-45e9-9de8-14f5c380f32d" class="text-xl font-semibold mb-2">检测方法</h4>
+              <ul id="1efe1e35-0724-42b1-b0be-4fe18a3cac53" class="space-y-2">
+                <li id="74be3a92-03e8-4967-916d-863eb8384f4f" class="flex">
+                  <i id="34f62851-b17b-4c91-824c-a26dd38f4691" class="fas fa-microscope text-blue-400 mt-1 mr-3"></i>
+                  <div id="5287b86e-fe73-4d1c-ad0f-7cc5dfcfcfb7">
+                    <span id="acb96663-d05c-4e4e-8c7e-cd35c606f05e" class="font-semibold">性能分析工具</span>
+                    <p id="f224b0e2-d5b2-4dde-9294-2e0764b1c1d0" class="text-sm">使用Intel VTune、AMD CodeAnalyst等工具监测缓存一致性事件</p>
+                  </div>
+                </li>
+                <li id="7632e189-d030-44f8-b9f4-115b2940681a" class="flex">
+                  <i id="d9b2c78d-142c-4f09-a9fc-181807333b6d" class="fas fa-chart-line text-blue-400 mt-1 mr-3"></i>
+                  <div id="d6976171-9f93-433e-b68d-5dee7a062983">
+                    <span id="f9cc8600-ad1d-4c48-86e1-36af49bcac62" class="font-semibold">性能基准测试</span>
+                    <p id="15e29e9f-49c2-48e6-bdee-d75fef272422" class="text-sm">比较使用填充技术前后的性能差异</p>
+                  </div>
+                </li>
+                <li id="736abbbe-c8ef-485e-8e43-44ddf5cc7c05" class="flex">
+                  <i id="237b94f9-cc19-465c-8967-fa639fd3c247" class="fas fa-stethoscope text-blue-400 mt-1 mr-3"></i>
+                  <div id="e53dbcca-48de-4ade-b420-65ae2352d2b8">
+                    <span id="1c05f45a-277a-4db1-9c6f-efd73f7a1165" class="font-semibold">硬件事件计数器</span>
+                    <p id="2425a1d7-c474-4d5a-9bdb-0796c991e2ae" class="text-sm">监视缓存不命中率和缓存一致性协议事件</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            
+            <div id="2677e88c-5a69-4008-9cb4-5240d814acbc" class="bg-gray-800 p-4 rounded-lg">
+              <h4 id="4b03748e-34fa-4c05-a0ca-2722e0b80ddc" class="text-xl font-semibold mb-2">最佳实践</h4>
+              <ul id="6fd5f395-c459-4a85-830d-c1b36d4aa420" class="space-y-2">
+                <li id="8491bb4e-5227-4435-820a-75ebcbfdcc51" class="flex">
+                  <i id="0c2b1c76-90c3-48bc-81d6-b31556bb09f1" class="fas fa-ruler-vertical text-green-400 mt-1 mr-3"></i>
+                  <div id="7189db9c-9613-4b0a-9cf1-90414420cd5c">
+                    <span id="c2c9c108-09b3-4fa9-9e59-eb26d8180c8a" class="font-semibold">数据结构设计</span>
+                    <p id="b9695cfd-9af4-4ae2-88d2-5d27ea8b11b7" class="text-sm">按访问模式组织数据，将经常同时修改的数据放在一起</p>
+                  </div>
+                </li>
+                <li id="db025615-7b81-4dc5-9c60-94113a8c4fa1" class="flex">
+                  <i id="5a4e30fb-00ff-4ab8-a472-a7a2b7c62a25" class="fas fa-align-center text-green-400 mt-1 mr-3"></i>
+                  <div id="22c260dc-c028-4f9f-906d-ea269170ca99">
+                    <span id="4be5f1b6-7bb9-44d6-baa3-86fa5eb23d97" class="font-semibold">对齐和填充</span>
+                    <p id="35232fd8-156a-4ede-a573-592c02ae938a" class="text-sm">使用alignas或特定的编译器指令确保缓存行对齐</p>
+                  </div>
+                </li>
+                <li id="c11c0dbc-3be8-4e5f-8446-86c8ef2a2d4a" class="flex">
+                  <i id="3af8f617-abe1-4fc4-9f71-5f121e96f72a" class="fas fa-code-branch text-green-400 mt-1 mr-3"></i>
+                  <div id="f9a577d8-596e-4750-b513-f835c6a750f0">
+                    <span id="8d525aa7-84a2-4b68-bc42-4b996ef438a8" class="font-semibold">分块处理</span>
+                    <p id="ffa01a85-07cb-4c6a-a28a-4ed7b2df0c83" class="text-sm">为每个线程分配独立的数据块，避免同时访问相邻内存区域</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- 交互式演示 -->
+        <div id="e0fc0455-d97e-43e5-a0c2-d013d891ba0c" class="bento-card gradient-bg-primary col-span-12 fade-in">
+          <h3 id="8f4c67e1-5266-43aa-8226-048276297e7a" class="concept-title">伪共享交互式演示</h3>
+          <p id="fd97c316-ecf7-494e-b969-75b328a26e84" class="mb-4">下面的演示展示了伪共享如何影响并发性能。点击按钮开始模拟并观察不同情况下的性能差异。</p>
+          
+          <div id="interactive-demo" class="w-full bg-gray-900 rounded-lg p-4">
+            <div id="demo-controls" class="flex flex-wrap items-center justify-center gap-4 mb-4">
+              <button id="start-without-padding" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">不使用填充</button>
+              <button id="start-with-padding" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">使用填充</button>
+              <button id="reset-demo" class="px-4 py-2 bg-gray-600 rounded-lg hover:bg-gray-700 transition">重置</button>
+            </div>
+            
+            <div id="demo-visualization" class="h-48 mb-4 relative">
+              <!-- 演示图形将在JS中生成 -->
+            </div>
+            
+            <div id="demo-stats" class="grid grid-cols-2 gap-4 text-center">
+              <div id="without-padding-stats" class="p-3 bg-gray-800 rounded-lg">
+                <h4 id="0f5bcb90-ce96-4a32-aaf6-e6d42eb2b3a5" class="font-semibold">无填充</h4>
+                <p id="without-padding-time" class="text-2xl font-mono">-</p>
+              </div>
+              <div id="with-padding-stats" class="p-3 bg-gray-800 rounded-lg">
+                <h4 id="260c2081-da2d-42da-8ee9-c08631f1978c" class="font-semibold">有填充</h4>
+                <p id="with-padding-time" class="text-2xl font-mono">-</p>
+              </div>
+            </div>
+          </div>
+          
+          <p id="31cce4aa-6946-4de3-8ce2-39d76fb7a767" class="mt-4 text-sm text-center">
+            注意：此演示只是模拟效果，实际性能差异在真实硬件上会更为显著。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 结论部分 -->
+  <section id="conclusion" class="py-20 px-4 sm:px-6 lg:px-8">
+    <div id="62b6e5a2-f4bc-4db7-a8b6-58a15f35c760" class="max-w-7xl mx-auto">
+      <div id="1635894e-d26a-4ddc-9b66-1465810c05ae" class="bento-card gradient-bg-primary col-span-12 fade-in">
+        <h2 id="f0ddaea7-52c3-4818-ad6d-9af44dc04999" class="concept-title text-center">总结与进一步学习</h2>
+        <p id="549b1ea8-1000-401f-bd38-9faac9dfabc6" class="mb-6">
+          我们已经深入探讨了C++并发编程中的关键概念：原子操作、内存序、无锁队列以及伪共享。掌握这些概念对开发高性能并发系统至关重要。
+        </p>
+        
+        <div id="b4287303-86dd-46ee-bc5e-26c5a2e665b0" class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div id="3b0c742b-6455-4a21-8507-a753f7a4ad31">
+            <h3 id="d78676fb-dfe0-4390-801a-17e370c6e917" class="text-xl font-semibold mb-2">关键收获</h3>
+            <ul id="ca3c425e-0374-4a7b-95f5-40c24488d1b1" class="list-disc list-inside space-y-1 pl-4">
+              <li id="33588506-df6a-4546-be63-ec516f53062c">原子操作提供了比互斥锁更轻量级的同步机制</li>
+              <li id="5d8cdbfb-7611-4cd9-986a-93d99266a028">内存序模型允许精确控制内存可见性，在性能和安全间取舍</li>
+              <li id="fd153aab-c9dc-49c1-8c93-2dc61fb9965f">无锁数据结构能显著提高并行系统吞吐量</li>
+              <li id="56894c75-a503-4062-a680-7889a09f9309">避免伪共享是优化多线程程序的重要手段</li>
+            </ul>
+          </div>
+          <div id="d61afa7d-66b7-4c30-a8ba-17d1bc5d615b">
+            <h3 id="4be66e0d-3c72-4c46-8c72-7ee301d6ed03" class="text-xl font-semibold mb-2">进阶学习资源</h3>
+            <ul id="52246119-3608-4dce-a7ef-372eb8ca784e" class="list-disc list-inside space-y-1 pl-4">
+              <li id="37fd643e-bbd7-4412-b154-74f742449109">《C++ Concurrency in Action》by Anthony Williams</li>
+              <li id="94739834-c59c-4428-92aa-21830f8d47f9">《The Art of Multiprocessor Programming》by Maurice Herlihy</li>
+              <li id="6d83a311-716c-4142-a6a1-90da3c60c934">CPP Reference的<a href="#" class="text-blue-300 hover:underline">std::atomic</a>和<a href="#" class="text-blue-300 hover:underline">std::memory_order</a>文档</li>
+              <li id="9bd81900-0f23-4059-9374-3230fb262be6">Herb Sutter的<a href="#" class="text-blue-300 hover:underline">Effective Concurrency</a>系列文章</li>
+            </ul>
+          </div>
+        </div>
+        
+        <p id="723539ab-603a-46e2-8321-f446756e5a7b" class="text-center">
+          现代C++并发编程是一个深入且复杂的领域，需要同时理解底层硬件架构和高级语言抽象。通过持续学习和实践，你将能够开发出既正确又高效的并发系统。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 导航点 -->
+  <div id="section-navigator" class="section-navigator hidden md:block">
+    <div id="nav-dot-hero" class="nav-dot active" data-target="hero"></div>
+    <div id="nav-dot-overview" class="nav-dot" data-target="overview"></div>
+    <div id="nav-dot-atomic-operations" class="nav-dot" data-target="atomic-operations"></div>
+    <div id="nav-dot-memory-order" class="nav-dot" data-target="memory-order"></div>
+    <div id="nav-dot-lock-free-queue" class="nav-dot" data-target="lock-free-queue"></div>
+    <div id="nav-dot-false-sharing" class="nav-dot" data-target="false-sharing"></div>
+    <div id="nav-dot-conclusion" class="nav-dot" data-target="conclusion"></div>
+  </div>
+
+  <script>
+    // 观察元素进入视口
+    const observeElements = () => {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      }, { threshold: 0.1 });
+
+      document.querySelectorAll('.fade-in').forEach(el => {
+        observer.observe(el);
+      });
+    };
+
+    // 导航点处理
+    const setupNavigation = () => {
+      const sections = document.querySelectorAll('section');
+      const navDots = document.querySelectorAll('.nav-dot');
+      
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            document.querySelectorAll('.nav-dot').forEach(dot => {
+              dot.classList.remove('active');
+              if (dot.dataset.target === id) {
+                dot.classList.add('active');
+              }
+            });
+          }
+        });
+      }, { threshold: 0.6 });
+
+      sections.forEach(section => {
+        observer.observe(section);
+      });
+
+      // 点击导航点滚动到相应部分
+      navDots.forEach(dot => {
+        dot.addEventListener('click', () => {
+          const targetId = dot.dataset.target;
+          document.getElementById(targetId).scrollIntoView({ 
+            behavior: 'smooth' 
+          });
+        });
+      });
+    };
+
+    // 原子操作与非原子操作图表
+    const createAtomicVsNonAtomicChart = () => {
+      const container = document.getElementById('atomic-visualization');
+      if (!container) return;
+
+      const atomicContainer = document.createElement('div');
+      atomicContainer.style.height = '40%';
+      atomicContainer.style.width = '100%';
+      atomicContainer.style.position = 'absolute';
+      atomicContainer.style.top = '15%';
+      atomicContainer.style.display = 'flex';
+      atomicContainer.style.alignItems = 'center';
+
+      const nonAtomicContainer = document.createElement('div');
+      nonAtomicContainer.style.height = '40%';
+      nonAtomicContainer.style.width = '100%';
+      nonAtomicContainer.style.position = 'absolute';
+      nonAtomicContainer.style.bottom = '15%';
+      nonAtomicContainer.style.display = 'flex';
+      nonAtomicContainer.style.alignItems = 'center';
+
+      // Atomic operation visualization
+      const atomicLine = document.createElement('div');
+      atomicLine.style.height = '2px';
+      atomicLine.style.width = '80%';
+      atomicLine.style.backgroundColor = '#3b82f6';
+      atomicLine.style.position = 'relative';
+      atomicLine.style.marginLeft = '10%';
+
+      const atomicLabel = document.createElement('div');
+      atomicLabel.textContent = 'atomic';
+      atomicLabel.style.position = 'absolute';
+      atomicLabel.style.left = '5px';
+      atomicLabel.style.top = '-10px';
+      atomicLabel.style.color = '#3b82f6';
+      atomicLabel.style.fontSize = '12px';
+      atomicLine.appendChild(atomicLabel);
+
+      const atomicOp = document.createElement('div');
+      atomicOp.style.width = '20px';
+      atomicOp.style.height = '20px';
+      atomicOp.style.backgroundColor = '#3b82f6';
+      atomicOp.style.borderRadius = '50%';
+      atomicOp.style.position = 'absolute';
+      atomicOp.style.top = '-9px';
+      atomicOp.style.left = '40%';
+      atomicLine.appendChild(atomicOp);
+
+      // Non-atomic operation visualization
+      const nonAtomicLine = document.createElement('div');
+      nonAtomicLine.style.height = '2px';
+      nonAtomicLine.style.width = '80%';
+      nonAtomicLine.style.backgroundColor = '#ef4444';
+      nonAtomicLine.style.position = 'relative';
+      nonAtomicLine.style.marginLeft = '10%';
+
+      const nonAtomicLabel = document.createElement('div');
+      nonAtomicLabel.textContent = 'non-atomic';
+      nonAtomicLabel.style.position = 'absolute';
+      nonAtomicLabel.style.left = '5px';
+      nonAtomicLabel.style.top = '-10px';
+      nonAtomicLabel.style.color = '#ef4444';
+      nonAtomicLabel.style.fontSize = '12px';
+      nonAtomicLine.appendChild(nonAtomicLabel);
+
+      const nonAtomicOp1 = document.createElement('div');
+      nonAtomicOp1.style.width = '8px';
+      nonAtomicOp1.style.height = '8px';
+      nonAtomicOp1.style.backgroundColor = '#ef4444';
+      nonAtomicOp1.style.borderRadius = '50%';
+      nonAtomicOp1.style.position = 'absolute';
+      nonAtomicOp1.style.top = '-3px';
+      nonAtomicOp1.style.left = '30%';
+      nonAtomicLine.appendChild(nonAtomicOp1);
+
+      const nonAtomicOp2 = document.createElement('div');
+      nonAtomicOp2.style.width = '8px';
+      nonAtomicOp2.style.height = '8px';
+      nonAtomicOp2.style.backgroundColor = '#ef4444';
+      nonAtomicOp2.style.borderRadius = '50%';
+      nonAtomicOp2.style.position = 'absolute';
+      nonAtomicOp2.style.top = '-3px';
+      nonAtomicOp2.style.left = '40%';
+      nonAtomicLine.appendChild(nonAtomicOp2);
+
+      const nonAtomicOp3 = document.createElement('div');
+      nonAtomicOp3.style.width = '8px';
+      nonAtomicOp3.style.height = '8px';
+      nonAtomicOp3.style.backgroundColor = '#ef4444';
+      nonAtomicOp3.style.borderRadius = '50%';
+      nonAtomicOp3.style.position = 'absolute';
+      nonAtomicOp3.style.top = '-3px';
+      nonAtomicOp3.style.left = '50%';
+      nonAtomicLine.appendChild(nonAtomicOp3);
+
+      // Thread representations
+      const thread1 = document.createElement('div');
+      thread1.classList.add('thread');
+      thread1.textContent = 'T1';
+      thread1.style.left = '10%';
+      thread1.style.top = '10%';
+
+      const thread2 = document.createElement('div');
+      thread2.classList.add('thread');
+      thread2.textContent = 'T2';
+      thread2.style.left = '75%';
+      thread2.style.top = '10%';
+
+      // Animate atomic operation
+      setTimeout(() => {
+        thread1.style.left = '40%';
+        atomicOp.style.backgroundColor = '#22c55e';
+        
+        setTimeout(() => {
+          thread1.style.left = '10%';
+          thread2.style.left = '40%';
+          
+          setTimeout(() => {
+            thread2.style.left = '75%';
+          }, 1000);
+        }, 1000);
+      }, 1000);
+
+      // Animate non-atomic operations showing interrupted execution
+      setTimeout(() => {
+        thread1.style.top = '70%';
+        thread1.style.left = '30%';
+        nonAtomicOp1.style.backgroundColor = '#22c55e';
+        
+        setTimeout(() => {
+          thread1.style.left = '10%';
+          thread1.style.top = '10%';
+          thread2.style.top = '70%';
+          thread2.style.left = '40%';
+          nonAtomicOp2.style.backgroundColor = '#f59e0b';
+          
+          setTimeout(() => {
+            thread2.style.left = '75%';
+            thread2.style.top = '10%';
+            thread1.style.top = '70%';
+            thread1.style.left = '50%';
+            nonAtomicOp3.style.backgroundColor = '#22c55e';
+            
+            setTimeout(() => {
+              thread1.style.left = '10%';
+              thread1.style.top = '10%';
+            }, 1000);
+          }, 1000);
+        }, 1000);
+      }, 4000);
+
+      atomicContainer.appendChild(atomicLine);
+      nonAtomicContainer.appendChild(nonAtomicLine);
+      container.appendChild(atomicContainer);
+      container.appendChild(nonAtomicContainer);
+      container.appendChild(thread1);
+      container.appendChild(thread2);
+    };
+
+    // 内存序关系图
+    const createMemoryOrderChart = () => {
+      const container = document.getElementById('memory-order-visualization');
+      if (!container) return;
+
+      // Create the visual representation
+      const chart = document.createElement('div');
+      chart.style.width = '100%';
+      chart.style.height = '100%';
+      chart.style.display = 'flex';
+      chart.style.flexDirection = 'column';
+      chart.style.justifyContent = 'center';
+
+      const timeline = document.createElement('div');
+      timeline.style.width = '100%';
+      timeline.style.height = '10px';
+      timeline.style.background = 'linear-gradient(to right, #ef4444, #f59e0b, #10b981)';
+      timeline.style.borderRadius = '5px';
+      timeline.style.position = 'relative';
+      chart.appendChild(timeline);
+
+      // Labels
+      const relaxedLabel = document.createElement('div');
+      relaxedLabel.textContent = 'Relaxed';
+      relaxedLabel.style.position = 'absolute';
+      relaxedLabel.style.left = '10%';
+      relaxedLabel.style.bottom = '150%';
+      relaxedLabel.style.color = '#ef4444';
+      relaxedLabel.style.fontWeight = 'bold';
+      timeline.appendChild(relaxedLabel);
+
+      const acqRelLabel = document.createElement('div');
+      acqRelLabel.textContent = 'Acquire-Release';
+      acqRelLabel.style.position = 'absolute';
+      acqRelLabel.style.left = '40%';
+      acqRelLabel.style.bottom = '150%';
+      acqRelLabel.style.color = '#f59e0b';
+      acqRelLabel.style.fontWeight = 'bold';
+      timeline.appendChild(acqRelLabel);
+
+      const seqCstLabel = document.createElement('div');
+      seqCstLabel.textContent = 'Sequential';
+      seqCstLabel.style.position = 'absolute';
+      seqCstLabel.style.left = '75%';
+      seqCstLabel.style.bottom = '150%';
+      seqCstLabel.style.color = '#10b981';
+      seqCstLabel.style.fontWeight = 'bold';
+      timeline.appendChild(seqCstLabel);
+
+      // Features
+      const createFeature = (text, left, top) => {
+        const feature = document.createElement('div');
+        feature.textContent = text;
+        feature.style.position = 'absolute';
+        feature.style.left = left;
+        feature.style.top = top;
+        feature.style.fontSize = '0.7rem';
+        feature.style.padding = '2px 6px';
+        feature.style.borderRadius = '4px';
+        feature.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        timeline.appendChild(feature);
+      };
+
+      createFeature('原子性', '10%', '180%');
+      createFeature('无内存同步', '10%', '240%');
+      createFeature('最高性能', '10%', '300%');
+      
+      createFeature('单向同步', '40%', '180%');
+      createFeature('部分顺序保证', '40%', '240%');
+      createFeature('中等性能', '40%', '300%');
+      
+      createFeature('全局顺序', '75%', '180%');
+      createFeature('双向同步', '75%', '240%');
+      createFeature('性能开销大', '75%', '300%');
+
+      // Markers
+      const relaxedMarker = document.createElement('div');
+      relaxedMarker.style.position = 'absolute';
+      relaxedMarker.style.width = '15px';
+      relaxedMarker.style.height = '15px';
+      relaxedMarker.style.left = '10%';
+      relaxedMarker.style.top = '50%';
+      relaxedMarker.style.transform = 'translate(-50%, -50%)';
+      relaxedMarker.style.backgroundColor = '#ef4444';
+      relaxedMarker.style.borderRadius = '50%';
+      timeline.appendChild(relaxedMarker);
+
+      const acqRelMarker = document.createElement('div');
+      acqRelMarker.style.position = 'absolute';
+      acqRelMarker.style.width = '15px';
+      acqRelMarker.style.height = '15px';
+      acqRelMarker.style.left = '40%';
+      acqRelMarker.style.top = '50%';
+      acqRelMarker.style.transform = 'translate(-50%, -50%)';
+      acqRelMarker.style.backgroundColor = '#f59e0b';
+      acqRelMarker.style.borderRadius = '50%';
+      timeline.appendChild(acqRelMarker);
+
+      const seqCstMarker = document.createElement('div');
+      seqCstMarker.style.position = 'absolute';
+      seqCstMarker.style.width = '15px';
+      seqCstMarker.style.height = '15px';
+      seqCstMarker.style.left = '75%';
+      seqCstMarker.style.top = '50%';
+      seqCstMarker.style.transform = 'translate(-50%, -50%)';
+      seqCstMarker.style.backgroundColor = '#10b981';
+      seqCstMarker.style.borderRadius = '50%';
+      timeline.appendChild(seqCstMarker);
+
+      container.appendChild(chart);
+    };
+
+    // 无锁队列图示
+    const createLockFreeQueueDiagram = () => {
+      const container = document.getElementById('lockfree-queue-diagram');
+      if (!container) return;
+
+      // Clear container
+      container.innerHTML = '';
+
+      // Create the linked list nodes
+      const createNode = (left, label, isHead = false, isTail = false) => {
+        const node = document.createElement('div');
+        node.style.width = '50px';
+        node.style.height = '50px';
+        node.style.borderRadius = '5px';
+        node.style.backgroundColor = isHead || isTail ? '#3b82f6' : '#4b5563';
+        node.style.position = 'absolute';
+        node.style.left = left;
+        node.style.top = '50%';
+        node.style.transform = 'translateY(-50%)';
+        node.style.display = 'flex';
+        node.style.justifyContent = 'center';
+        node.style.alignItems = 'center';
+        node.style.color = 'white';
+        node.style.fontWeight = 'bold';
+        node.style.border = '2px solid #1f2937';
+        node.textContent = label;
+        
+        if (isHead) {
+          const headLabel = document.createElement('div');
+          headLabel.textContent = 'head';
+          headLabel.style.position = 'absolute';
+          headLabel.style.top = '-25px';
+          headLabel.style.fontSize = '0.8rem';
+          node.appendChild(headLabel);
+        }
+        
+        if (isTail) {
+          const tailLabel = document.createElement('div');
+          tailLabel.textContent = 'tail';
+          tailLabel.style.position = 'absolute';
+          tailLabel.style.top = '-25px';
+          tailLabel.style.fontSize = '0.8rem';
+          node.appendChild(tailLabel);
+        }
+        
+        return node;
+      };
+
+      // Create arrows between nodes
+      const createArrow = (fromLeft, toLeft) => {
+        const arrow = document.createElement('div');
+        arrow.style.position = 'absolute';
+        arrow.style.top = '50%';
+        arrow.style.left = `calc(${fromLeft} + 50px)`;
+        arrow.style.width = `calc(${toLeft} - ${fromLeft} - 50px)`;
+        arrow.style.height = '2px';
+        arrow.style.backgroundColor = '#e5e7eb';
+        
+        // Arrow head
+        const arrowHead = document.createElement('div');
+        arrowHead.style.position = 'absolute';
+        arrowHead.style.right = '-6px';
+        arrowHead.style.top = '-4px';
+        arrowHead.style.width = '0';
+        arrowHead.style.height = '0';
+        arrowHead.style.borderTop = '5px solid transparent';
+        arrowHead.style.borderBottom = '5px solid transparent';
+        arrowHead.style.borderLeft = '8px solid #e5e7eb';
+        arrow.appendChild(arrowHead);
+        
+        return arrow;
+      };
+
+      // Add components
+      const dummy = createNode('10%', 'dummy', true);
+      const node1 = createNode('30%', '42');
+      const node2 = createNode('50%', '17');
+      const tail = createNode('70%', '99', false, true);
+      
+      const arrow1 = createArrow('10%', '30%');
+      const arrow2 = createArrow('30%', '50%');
+      const arrow3 = createArrow('50%', '70%');
+      
+      // Threads
+      const enqueueThread = document.createElement('div');
+      enqueueThread.classList.add('thread');
+      enqueueThread.style.backgroundColor = '#10b981';
+      enqueueThread.textContent = 'enq';
+      enqueueThread.style.top = '20%';
+      enqueueThread.style.right = '10%';
+      
+      const dequeueThread = document.createElement('div');
+      dequeueThread.classList.add('thread');
+      dequeueThread.style.backgroundColor = '#ef4444';
+      dequeueThread.textContent = 'deq';
+      dequeueThread.style.top = '80%';
+      dequeueThread.style.left = '10%';
+
+      // Animation for demonstration
+      setTimeout(() => {
+        enqueueThread.style.top = '50%';
+        enqueueThread.style.right = '20%';
+        
+        setTimeout(() => {
+          // Create new node
+          const newNode = createNode('90%', '23');
+          container.appendChild(newNode);
+          
+          setTimeout(() => {
+            // Create new arrow
+            const newArrow = createArrow('70%', '90%');
+            container.appendChild(newArrow);
+            
+            setTimeout(() => {
+              // Update tail position
+              tail.style.left = '90%';
+              enqueueThread.style.top = '20%';
+              enqueueThread.style.right = '10%';
+              
+              // Dequeue animation
+              setTimeout(() => {
+                dequeueThread.style.top = '50%';
+                dequeueThread.style.left = '20%';
+                
+                setTimeout(() => {
+                  dummy.style.backgroundColor = 'rgba(75, 85, 99, 0.5)';
+                  dummy.style.border = '2px dashed #1f2937';
+                  node1.style.backgroundColor = '#3b82f6';
+                  
+                  setTimeout(() => {
+                    dequeueThread.style.top = '80%';
+                    dequeueThread.style.left = '10%';
+                  }, 1000);
+                }, 1000);
+              }, 1500);
+            }, 1000);
+          }, 1000);
+        }, 1000);
+      }, 1000);
+
+      // Add components to container
+      container.appendChild(dummy);
+      container.appendChild(node1);
+      container.appendChild(node2);
+      container.appendChild(tail);
+      container.appendChild(arrow1);
+      container.appendChild(arrow2);
+      container.appendChild(arrow3);
+      container.appendChild(enqueueThread);
+      container.appendChild(dequeueThread);
+    };
+
+    // 伪共享图示
+    const createFalseSharingDiagram = () => {
+      const container = document.getElementById('cacheline-visualization');
+      if (!container) return;
+
+      // Create cache line representation
+      const createCacheLine = (top, label) => {
+        const cacheLineContainer = document.createElement('div');
+        cacheLineContainer.style.position = 'absolute';
+        cacheLineContainer.style.top = top;
+        cacheLineContainer.style.left = '10%';
+        cacheLineContainer.style.width = '80%';
+        cacheLineContainer.style.height = '40px';
+        cacheLineContainer.style.borderRadius = '8px';
+        cacheLineContainer.style.border = '2px solid #4b5563';
+        cacheLineContainer.style.display = 'flex';
+        
+        // Label
+        const cacheLineLabel = document.createElement('div');
+        cacheLineLabel.textContent = label;
+        cacheLineLabel.style.position = 'absolute';
+        cacheLineLabel.style.left = '-80px';
+        cacheLineLabel.style.top = '50%';
+        cacheLineLabel.style.transform = 'translateY(-50%)';
+        cacheLineLabel.style.fontSize = '0.8rem';
+        cacheLineContainer.appendChild(cacheLineLabel);
+        
+        // Add blocks
+        for (let i = 0; i < 8; i++) {
+          const block = document.createElement('div');
+          block.style.flex = '1';
+          block.style.height = '100%';
+          block.style.borderRight = i < 7 ? '1px dashed #4b5563' : 'none';
+          block.style.display = 'flex';
+          block.style.justifyContent = 'center';
+          block.style.alignItems = 'center';
+          block.style.fontSize = '0.7rem';
+          block.dataset.index = i;
+          cacheLineContainer.appendChild(block);
+        }
+        
+        return cacheLineContainer;
+      };
+
+      // Create CPU representation
+      const createCPU = (left, top, label) => {
+        const cpu = document.createElement('div');
+        cpu.style.position = 'absolute';
+        cpu.style.width = '60px';
+        cpu.style.height = '60px';
+        cpu.style.borderRadius = '50%';
+        cpu.style.backgroundColor = '#3b82f6';
+        cpu.style.left = left;
+        cpu.style.top = top;
+        cpu.style.display = 'flex';
+        cpu.style.justifyContent = 'center';
+        cpu.style.alignItems = 'center';
+        cpu.style.fontWeight = 'bold';
+        cpu.textContent = label;
+        
+        return cpu;
+      };
+      
+      // Create arrows
+      const createArrow = (fromElement, toElement, color, curved = false) => {
+        const arrow = document.createElement('div');
+        arrow.style.position = 'absolute';
+        arrow.style.width = '3px';
+        arrow.style.background = color;
+        arrow.style.zIndex = '1';
+        
+        if (curved) {
+          arrow.style.height = '70px';
+          arrow.style.borderRadius = '50%';
+        } else {
+          arrow.style.height = '50px';
+        }
+        
+        return arrow;
+      };
+
+      // Main Components
+      const cacheLine1 = createCacheLine('20%', 'CPU1 Cache');
+      const cacheLine2 = createCacheLine('70%', 'CPU2 Cache');
+      
+      const cpu1 = createCPU('15%', '5%', 'CPU1');
+      const cpu2 = createCPU('75%', '5%', 'CPU2');
+      
+      // Fill variable data into cache blocks
+      const blocks1 = cacheLine1.querySelectorAll('div[data-index]');
+      const blocks2 = cacheLine2.querySelectorAll('div[data-index]');
+      
+      blocks1[2].textContent = 'var1';
+      blocks1[2].style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
+      
+      blocks1[5].textContent = 'var2';
+      blocks1[5].style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+      
+      blocks2[2].textContent = 'var1';
+      blocks2[2].style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
+      
+      blocks2[5].textContent = 'var2';
+      blocks2[5].style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+
+      // Add elements to container
+      container.appendChild(cacheLine1);
+      container.appendChild(cacheLine2);
+      container.appendChild(cpu1);
+      container.appendChild(cpu2);
+      
+      // Animation to demonstrate false sharing
+      setTimeout(() => {
+        // CPU1 updates var1
+        const highlight1 = document.createElement('div');
+        highlight1.style.position = 'absolute';
+        highlight1.style.width = '100%';
+        highlight1.style.height = '100%';
+        highlight1.style.backgroundColor = 'rgba(59, 130, 246, 0.5)';
+        highlight1.style.borderRadius = 'inherit';
+        highlight1.style.animation = 'pulse 1s';
+        blocks1[2].style.position = 'relative';
+        blocks1[2].appendChild(highlight1);
+        
+        // Show invalidation
+        blocks2[2].style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+        blocks2[2].style.color = 'rgba(255, 255, 255, 0.5)';
+        blocks2[5].style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+        blocks2[5].style.color = 'rgba(255, 255, 255, 0.5)';
+        
+        // Add an invalidation line
+        const invalidateLine = document.createElement('div');
+        invalidateLine.style.position = 'absolute';
+        invalidateLine.style.top = '40%';
+        invalidateLine.style.left = '50%';
+        invalidateLine.style.width = '30%';
+        invalidateLine.style.height = '2px';
+        invalidateLine.style.backgroundColor = '#ef4444';
+        invalidateLine.style.transformOrigin = 'left';
+        invalidateLine.style.animation = 'growRight 0.5s forwards';
+        container.appendChild(invalidateLine);
+        
+        // CPU2 tries to access var2
+        setTimeout(() => {
+          blocks2[2].style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
+          blocks2[2].style.color = 'white';
+          blocks2[5].style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+          blocks2[5].style.color = 'white';
+          
+          const highlight2 = document.createElement('div');
+          highlight2.style.position = 'absolute';
+          highlight2.style.width = '100%';
+          highlight2.style.height = '100%';
+          highlight2.style.backgroundColor = 'rgba(239, 68, 68, 0.5)';
+          highlight2.style.borderRadius = 'inherit';
+          highlight2.style.animation = 'pulse 1s';
+          blocks2[5].style.position = 'relative';
+          blocks2[5].appendChild(highlight2);
+          
+          // Show invalidation back to CPU1
+          blocks1[2].style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+          blocks1[2].style.color = 'rgba(255, 255, 255, 0.5)';
+          blocks1[5].style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+          blocks1[5].style.color = 'rgba(255, 255, 255, 0.5)';
+          
+          const invalidateLine2 = document.createElement('div');
+          invalidateLine2.style.position = 'absolute';
+          invalidateLine2.style.top = '45%';
+          invalidateLine2.style.left = '20%';
+          invalidateLine2.style.width = '30%';
+          invalidateLine2.style.height = '2px';
+          invalidateLine2.style.backgroundColor = '#ef4444';
+          invalidateLine2.style.transformOrigin = 'right';
+          invalidateLine2.style.animation = 'growLeft 0.5s forwards';
+          container.appendChild(invalidateLine2);
+          
+          // Add false sharing label
+          setTimeout(() => {
+            const falseShareLabel = document.createElement('div');
+            falseShareLabel.textContent = 'False Sharing';
+            falseShareLabel.style.position = 'absolute';
+            falseShareLabel.style.top = '47%';
+            falseShareLabel.style.left = '50%';
+            falseShareLabel.style.transform = 'translate(-50%, -50%)';
+            falseShareLabel.style.backgroundColor = 'rgba(239, 68, 68, 0.7)';
+            falseShareLabel.style.color = 'white';
+            falseShareLabel.style.padding = '5px 10px';
+            falseShareLabel.style.borderRadius = '4px';
+            falseShareLabel.style.fontWeight = 'bold';
+            container.appendChild(falseShareLabel);
+          }, 1000);
+        }, 1500);
+      }, 1000);
+
+      // Add keyframe animations to document head
+      const style = document.createElement('style');
+      style.innerHTML = `
+        @keyframes pulse {
+          0% { opacity: 0.7; }
+          50% { opacity: 1; }
+          100% { opacity: 0.7; }
+        }
+        
+        @keyframes growRight {
+          0% { transform: scaleX(0); }
+          100% { transform: scaleX(1); }
+        }
+        
+        @keyframes growLeft {
+          0% { transform: scaleX(0); }
+          100% { transform: scaleX(1); }
+        }
+      `;
+      document.head.appendChild(style);
+    };
+
+    // 填充技术对比图
+    const createPaddingComparisonChart = () => {
+      const container = document.getElementById('padding-comparison-chart');
+      if (!container) return;
+
+      // Create container for chart
+      const chart = document.createElement('div');
+      chart.style.width = '100%';
+      chart.style.height = '100%';
+      chart.style.display = 'flex';
+      chart.style.justifyContent = 'space-evenly';
+      chart.style.alignItems = 'flex-end';
+      
+      // Create performance bars
+      const createBar = (height, label, color) => {
+        const barContainer = document.createElement('div');
+        barContainer.style.display = 'flex';
+        barContainer.style.flexDirection = 'column';
+        barContainer.style.alignItems = 'center';
+        barContainer.style.width = '25%';
+        
+        const bar = document.createElement('div');
+        bar.style.width = '80%';
+        bar.style.backgroundColor = color;
+        bar.style.height = '0';
+        bar.style.transition = 'height 1.5s ease';
+        setTimeout(() => {
+          bar.style.height = height;
+        }, 500);
+        
+        const labelElement = document.createElement('div');
+        labelElement.textContent = label;
+        labelElement.style.marginTop = '10px';
+        labelElement.style.fontSize = '0.8rem';
+        labelElement.style.textAlign = 'center';
+        
+        const value = document.createElement('div');
+        value.textContent = height.replace('%', 'x');
+        value.style.marginTop = '5px';
+        value.style.fontWeight = 'bold';
+        
+        barContainer.appendChild(bar);
+        barContainer.appendChild(labelElement);
+        barContainer.appendChild(value);
+        
+        return barContainer;
+      };
+      
+      // Add bars
+      chart.appendChild(createBar('20%', '无填充', 'rgba(239, 68, 68, 0.7)'));
+      chart.appendChild(createBar('60%', '手动填充', 'rgba(245, 158, 11, 0.7)'));
+      chart.appendChild(createBar('90%', '缓存行对齐', 'rgba(16, 185, 129, 0.7)'));
+      
+      // Add y-axis label
+      const yLabel = document.createElement('div');
+      yLabel.textContent = '性能倍数';
+      yLabel.style.position = 'absolute';
+      yLabel.style.transform = 'rotate(-90deg)';
+      yLabel.style.left = '-25px';
+      yLabel.style.top = '50%';
+      yLabel.style.fontSize = '0.8rem';
+      chart.appendChild(yLabel);
+      
+      container.appendChild(chart);
+    };
+
+    // 伪共享交互演示
+    const setupFalseSharingDemo = () => {
+      const demoContainer = document.getElementById('demo-visualization');
+      const withoutPaddingTimeEl = document.getElementById('without-padding-time');
+      const withPaddingTimeEl = document.getElementById('with-padding-time');
+      
+      if (!demoContainer || !withoutPaddingTimeEl || !withPaddingTimeEl) return;
+      
+      // Create visualization elements
+      const createCacheLines = (showPadding) => {
+        demoContainer.innerHTML = '';
+        
+        const cacheLine = document.createElement('div');
+        cacheLine.classList.add('cache-line');
+        cacheLine.style.width = '90%';
+        cacheLine.style.margin = '20px auto';
+        cacheLine.style.display = 'flex';
+        
+        // Create 8 blocks (representing 8 bytes in a 64-byte cache line)
+        for (let i = 0; i < 8; i++) {
+          const block = document.createElement('div');
+          block.classList.add('cache-block');
+          block.style.flex = '1';
+          
+          // Mark variables
+          if (i === 1) {
+            block.textContent = 'var1';
+            block.style.backgroundColor = 'rgba(59, 130, 246, 0.3)';
+          }
+          if (i === 2) {
+            block.textContent = 'var2';
+            block.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+          }
+          if (showPadding && i > 2 && i < 7) {
+            block.style.backgroundColor = 'rgba(16, 185, 129, 0.1)';
+            block.textContent = 'pad';
+          }
+          
+          cacheLine.appendChild(block);
+        }
+        
+        // Create thread representations
+        const thread1 = document.createElement('div');
+        thread1.classList.add('thread');
+        thread1.style.backgroundColor = '#3b82f6';
+        thread1.textContent = 'T1';
+        thread1.style.left = '20%';
+        thread1.style.top = '-30px';
+        
+        const thread2 = document.createElement('div');
+        thread2.classList.add('thread');
+        thread2.style.backgroundColor = '#ef4444';
+        thread2.textContent = 'T2';
+        thread2.style.left = '30%';
+        thread2.style.top = '-30px';
+        
+        // Add elements to container
+        demoContainer.appendChild(cacheLine);
+        demoContainer.appendChild(thread1);
+        demoContainer.appendChild(thread2);
+        
+        return { thread1, thread2 };
+      };
+      
+      // Run simulations
+      document.getElementById('start-without-padding').addEventListener('click', () => {
+        const { thread1, thread2 } = createCacheLines(false);
+        
+        // Start simulation timer
+        const startTime = Date.now();
+        let operations = 0;
+        let invalidations = 0;
+        
+        // Simulate false sharing with threads accessing adjacent variables
+        const interval = setInterval(() => {
+          operations++;
+          
+          // Random position around var1
+          const pos1X = 15 + Math.random() * 10;
+          thread1.style.left = `${pos1X}%`;
+          thread1.style.top = '20px';
+          
+          setTimeout(() => {
+            thread1.style.top = '-30px';
+            
+            // Random position around var2
+            const pos2X = 25 + Math.random() * 10;
+            thread2.style.left = `${pos2X}%`;
+            thread2.style.top = '20px';
+            
+            invalidations++;
+            
+            // Display invalidation
+            const invalidation = document.createElement('div');
+            invalidation.style.position = 'absolute';
+            invalidation.style.top = '50%';
+            invalidation.style.left = '50%';
+            invalidation.style.width = '20%';
+            invalidation.style.height = '2px';
+            invalidation.style.backgroundColor = '#ef4444';
+            invalidation.style.animation = 'fade-out 0.5s forwards';
+            demoContainer.appendChild(invalidation);
+            
+            setTimeout(() => {
+              thread2.style.top = '-30px';
+              invalidation.remove();
+            }, 300);
+          }, 300);
+          
+          // End simulation after 4 seconds
+          if (operations >= 8) {
+            clearInterval(interval);
+            const endTime = Date.now();
+            const duration = endTime - startTime;
+            withoutPaddingTimeEl.textContent = `${duration}ms (${invalidations} invalidations)`;
+          }
+        }, 500);
+      });
+      
+      document.getElementById('start-with-padding').addEventListener('click', () => {
+        const { thread1, thread2 } = createCacheLines(true);
+        
+        // Start simulation timer
+        const startTime = Date.now();
+        let operations = 0;
+        
+        // Simulate with padding - no false sharing
+        const interval = setInterval(() => {
+          operations++;
+          
+          // Random position around var1
+          const pos1X = 15 + Math.random() * 10;
+          thread1.style.left = `${pos1X}%`;
+          thread1.style.top = '20px';
+          
+          setTimeout(() => {
+            thread1.style.top = '-30px';
+            
+            // Random position around var2, now separated by padding
+            const pos2X = 65 + Math.random() * 10; // Position after padding
+            thread2.style.left = `${pos2X}%`;
+            thread2.style.top = '20px';
+            
+            setTimeout(() => {
+              thread2.style.top = '-30px';
+            }, 300);
+          }, 300);
+          
+          // End simulation after 4 seconds
+          if (operations >= 8) {
+            clearInterval(interval);
+            const endTime = Date.now();
+            const duration = endTime - startTime;
+            withPaddingTimeEl.textContent = `${duration * 0.6}ms (0 invalidations)`;
+          }
+        }, 500);
+      });
+      
+      document.getElementById('reset-demo').addEventListener('click', () => {
+        createCacheLines(false);
+        withoutPaddingTimeEl.textContent = '-';
+        withPaddingTimeEl.textContent = '-';
+      });
+      
+      // Initial setup
+      createCacheLines(false);
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      observeElements();
+      setupNavigation();
+      createAtomicVsNonAtomicChart();
+      createMemoryOrderChart();
+      createLockFreeQueueDiagram();
+      createFalseSharingDiagram();
+      createPaddingComparisonChart();
+      setupFalseSharingDemo();
+      
+      // Add keyframe animation for demo
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes fade-out {
+          0% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+    });
+  </script>
+</body>
+</html>
