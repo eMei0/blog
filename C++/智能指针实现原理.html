@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++智能指针的实现原理</title>
+    <link href="https://fastly.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fastly.jsdelivr.net/npm/@fontsource/noto-sans-sc@4.5.12/index.css" rel="stylesheet">
+    <link href="https://fastly.jsdelivr.net/npm/@fontsource/fira-code@5.2.0/index.css" rel="stylesheet">
+    <link href="https://fastly.jsdelivr.net/npm/@fontsource/inter@4.5.15/index.css" rel="stylesheet">
+    <link href="https://fastly.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet">
+    <script src="https://fastly.jsdelivr.net/npm/echarts@5.4.2/dist/echarts.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/framer-motion@10.12.12/dist/framer-motion.js"></script>
+    <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background-color: #fafafa;
+            color: #333;
+            line-height: 1.7;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, rgba(238,174,202,0.1) 0%, rgba(148,187,233,0.1) 100%);
+        }
+        
+        .card {
+            border-radius: 16px;
+            background: white;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+        
+        .gradient-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%);
+            backdrop-filter: blur(10px);
+        }
+        
+        .highlight-blue {
+            background: linear-gradient(90deg, rgba(59,130,246,0.1) 0%, rgba(59,130,246,0) 100%);
+        }
+        
+        .highlight-purple {
+            background: linear-gradient(90deg, rgba(124,58,237,0.1) 0%, rgba(124,58,237,0) 100%);
+        }
+        
+        .highlight-green {
+            background: linear-gradient(90deg, rgba(16,185,129,0.1) 0%, rgba(16,185,129,0) 100%);
+        }
+        
+        code {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            padding: 0 0.2rem;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        
+        pre code {
+            display: block;
+            overflow-x: auto;
+            padding: 1.5rem;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+        
+        .number-highlight {
+            font-size: 3rem;
+            font-weight: 800;
+            line-height: 1;
+            background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+        
+        .big-title {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 900;
+            line-height: 1.2;
+        }
+        
+        .section-title {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 700;
+            position: relative;
+            margin-bottom: 2rem;
+            display: inline-block;
+        }
+        
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            width: 60px;
+            height: 4px;
+            background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+            border-radius: 2px;
+        }
+        
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 24px;
+        }
+        
+        @media screen and (max-width: 768px) {
+            .bento-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Custom scroll indicator */
+        .scroll-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+            z-index: 1000;
+            width: 0%;
+            transition: width 0.2s ease;
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="d20bbd13-ad8c-4a5f-ba7b-3df94f19bb10" class="scroll-indicator"></div>
+
+    <header id="c2ead210-5a61-4fa6-9432-f6bd3740ce77" class="w-full py-10 px-4 md:px-8 lg:px-16 gradient-bg">
+        <div id="a2f16e91-dd6c-4d13-8d62-424c61f96aeb" class="max-w-7xl mx-auto">
+            <div id="b99118d1-c6e8-443b-9d1a-f8ecfad1b01e" data-aos="fade-up" data-aos-duration="800" class="text-center">
+                <h1 id="c1f37547-5692-4237-87f3-b6fca02fca58" class="big-title">C++<span class="text-blue-600">智能指针</span>的实现原理</h1>
+                <p id="dd19befd-fbcf-42b3-9bf3-4ca6b31f4dc6" class="mt-4 text-gray-600 max-w-3xl mx-auto text-lg">
+                    Smart pointers are abstract data types used for automatic memory management based on RAII technique
+                </p>
+            </div>
+        </div>
+    </header>
+
+    <main id="b5a3302c-dbb9-4525-aed2-0e39643a4f38" class="max-w-7xl mx-auto px-4 md:px-8 lg:px-16 py-12">
+        <section id="d5825549-fa10-47b5-9edd-52847870cd53" class="mb-20">
+            <div id="a4a6e92a-bb1b-4bb9-b64c-829afb3af6c6" data-aos="fade-up" class="mb-8">
+                <h2 id="de8a3f2b-cb05-448d-b29d-e94ecc4c4511" class="section-title">基本原理</h2>
+                <p id="f83a419b-a066-43c7-ac64-2310194be0dc" class="text-gray-700">
+                    智能指针是C++中用于自动管理动态分配内存的一种抽象数据类型。它的核心思想基于RAII（Resource Acquisition Is Initialization）技术，通过将资源的生命周期与对象的生命周期绑定，实现了自动内存管理，有效防止内存泄漏。
+                </p>
+            </div>
+
+            <div id="ff32f5db-2114-44d4-b42a-81c40b02fad7" class="bento-grid mb-12">
+                <div id="a1c91b7e-80b3-475f-9853-3c15a1c4bbbc" class="card p-6 col-span-12 md:col-span-4 highlight-blue" data-aos="fade-right" data-aos-delay="100">
+                    <div id="e9a3afaf-e1d5-4f4e-b232-de7ab8144d12" class="number-highlight">01</div>
+                    <h3 id="ba1ac41c-5f3d-498c-80e6-3aecde226c7b" class="text-xl font-bold mb-2">RAII特性</h3>
+                    <p id="c946c89a-8e72-4ffa-9add-75a411e4eaf2" class="text-gray-600">
+                        在构造函数中获取资源（如分配内存），在析构函数中释放资源。
+                    </p>
+                </div>
+
+                <div id="a53befe2-fe0b-44de-bc6b-4bf9a91f1233" class="card p-6 col-span-12 md:col-span-4 highlight-purple" data-aos="fade-right" data-aos-delay="200">
+                    <div id="d70ba2ce-0481-4c5d-8cbd-8c5c6a0367dc" class="number-highlight">02</div>
+                    <h3 id="dca4ae2d-fa82-4075-96f6-68abab5bfdd8" class="text-xl font-bold mb-2">指针行为模拟</h3>
+                    <p id="f56e2133-e591-48ed-9928-7d6abfb5daa2" class="text-gray-600">
+                        通过重载<code>operator*</code>和<code>operator-></code>操作符，使智能指针的使用方式与原生指针相似。
+                    </p>
+                </div>
+
+                <div id="b9c4bffc-51b9-4739-9036-5eb1b5a39655" class="card p-6 col-span-12 md:col-span-4 highlight-green" data-aos="fade-right" data-aos-delay="300">
+                    <div id="a11fb52a-50ff-4711-8bc5-915437b61ae6" class="number-highlight">03</div>
+                    <h3 id="f355c52f-ff80-4a51-9024-cc8e7e9f75bc" class="text-xl font-bold mb-2">引用计数</h3>
+                    <p id="eee58c48-0343-4927-9961-7ac93039f51a" class="text-gray-600">
+                        对于某些类型的智能指针，跟踪资源被引用的次数，当计数为零时释放资源。
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section id="f0c17863-14dc-48d9-be91-c17d54c982c9" class="mb-20">
+            <div id="e502cd6e-97fb-425a-966a-3ada5dca2ea5" data-aos="fade-up">
+                <h2 id="e6129ac2-8073-4cbe-92bc-94c569c668ae" class="section-title">主要类型及其实现原理</h2>
+            </div>
+
+            <div id="c31ddae7-7fb5-44df-b018-08eb2468168a" class="mb-14">
+                <div id="c3ce4dc5-9ebb-4807-b420-0832e88563be" class="card p-8" data-aos="fade-up">
+                    <h3 id="a203f614-4184-4dd0-ae15-7475a826612f" class="text-2xl font-bold mb-4">std::unique_ptr</h3>
+                    <div id="f98d9dc4-6f7b-4ea7-8b6b-96ffebfe5003" class="flex flex-col md:flex-row gap-8">
+                        <div id="e584f3e3-f6c6-4d6b-bfeb-15f5e7afe9a0" class="md:w-1/3">
+                            <div id="d8b78bee-c65c-4a02-b321-5ad2203c0450" class="mb-4">
+                                <h4 id="a77436a0-3cac-4661-93aa-d6f017afb31c" class="text-lg font-semibold mb-2">原理</h4>
+                                <p id="df080add-1232-41d4-bf4d-eba78f98d19e" class="text-gray-700">独占式拥有，不允许复制，只能移动。</p>
+                            </div>
+                            <div id="de9aeab5-aac3-4f86-bd4e-14c77f5d9d13">
+                                <h4 id="a2d79bcf-084e-4d37-af43-560f315f78e8" class="text-lg font-semibold mb-2">实现要点</h4>
+                                <ul id="bc197a48-ab67-468c-95d9-0d316ed4db52" class="list-disc list-inside text-gray-700">
+                                    <li id="e601f55a-79a3-4098-ab6a-88bcd6805e5e">禁用拷贝构造函数和赋值运算符</li>
+                                    <li id="a0cfb234-ba37-4c2e-9e7e-3f2bf46c4e34">提供移动构造函数和移动赋值运算符</li>
+                                    <li id="c53ae804-33b9-4ab9-b878-b40940738429">在析构函数中释放资源</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div id="c8cb9fe6-b417-4723-9e8d-05b7bdf58c02" class="md:w-2/3">
+                            <h4 id="d1cb2339-c691-4d1f-bc48-3a9b64b35740" class="text-lg font-semibold mb-2">简化的实现示例：</h4>
+                            <pre id="c9d4d91b-2c6a-41c4-a520-873dd079a2e7"><code class="language-cpp">template &lt;typename T&gt;
+class unique_ptr {
+private:
+    T* ptr;
+
+public:
+    explicit unique_ptr(T* p = nullptr) : ptr(p) {}
+    ~unique_ptr() { delete ptr; }
+
+    //禁用拷贝
+    unique_ptr(const unique_ptr&) = delete;
+    unique_ptr& operator=(const unique_ptr&) = delete;
+
+    // 允许移动
+    unique_ptr(unique_ptr&& other) noexcept : ptr(other.ptr) {
+        other.ptr = nullptr;
+    }
+    unique_ptr& operator=(unique_ptr&& other) noexcept {
+        if (this != &other) {
+            delete ptr;
+            ptr = other.ptr;
+            other.ptr = nullptr;
+        }
+        return *this;
+    }
+
+    T& operator*() const { return *ptr; }
+    T* operator->() const { return ptr; }
+    T* get() const { return ptr; }
+};</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="be843724-f22e-4e86-ab1c-d5a6c33ba976" class="mb-14">
+                <div id="a36d1433-38eb-4462-ae94-a248881962dc" class="card p-8" data-aos="fade-up">
+                    <h3 id="e6df2c18-282d-4af1-a421-615b0d745dea" class="text-2xl font-bold mb-4">std::shared_ptr</h3>
+                    <div id="bd642ec7-2458-49f0-836c-0ef629480400" class="flex flex-col md:flex-row gap-8">
+                        <div id="dd37e6a8-0ed9-4fd5-ae2e-f993f7cf536b" class="md:w-1/3">
+                            <div id="f61b718e-c346-4de9-84d6-a8dcfae61e5b" class="mb-4">
+                                <h4 id="b081aa7e-fac1-4c35-97bc-aca14ca4bf63" class="text-lg font-semibold mb-2">原理</h4>
+                                <p id="f04c9c20-ef28-409e-a37e-5be9e962610d" class="text-gray-700">共享式拥有，使用引用计数。</p>
+                            </div>
+                            <div id="f61b0602-bf78-40bf-bbdf-d2c6db3644c0">
+                                <h4 id="cba5bc8c-e898-461e-9610-ff30ea78f4ad" class="text-lg font-semibold mb-2">实现要点</h4>
+                                <ul id="abfa118d-4a9a-4bdd-a008-1dd2427ede85" class="list-disc list-inside text-gray-700">
+                                    <li id="b66d7527-7f3b-435b-ae7e-123f502e743f">维护一个引用计数</li>
+                                    <li id="ed7e819e-9c6a-4ebd-84aa-673e2c3edf23">拷贝时增加引用计数</li>
+                                    <li id="e440ec68-b43a-4fd7-9d75-aa013689e064">析构时减少引用计数，当计数为零时释放资源</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div id="bdd996f2-1cc5-4c42-a9e0-9121fa1e8d5f" class="md:w-2/3">
+                            <h4 id="c3630901-af59-44df-866a-17c2678c71e2" class="text-lg font-semibold mb-2">简化的实现示例：</h4>
+                            <pre id="d87318f5-bace-477e-9fb2-787b8443e769"><code class="language-cpp">template &lt;typename T&gt;
+class shared_ptr {
+private:
+    T* ptr;
+    size_t* ref_count;
+
+public:
+    explicit shared_ptr(T* p = nullptr) : ptr(p), ref_count(new size_t(1)) {}
+
+    shared_ptr(const shared_ptr& other) : ptr(other.ptr), ref_count(other.ref_count) {
+        ++(*ref_count);
+    }
+
+    shared_ptr& operator=(const shared_ptr& other) {
+        if (this != &other) {
+            release();
+            ptr = other.ptr;
+            ref_count = other.ref_count;
+            ++(*ref_count);
+        }
+        return *this;
+    }
+
+    ~shared_ptr() {
+        release();
+    }
+
+    T& operator*() const { return *ptr; }
+    T* operator->() const { return ptr; }
+
+private:
+    void release() {
+        if (--(*ref_count) == 0) {
+            delete ptr;
+            delete ref_count;
+        }
+    }
+};</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="af403c04-0f45-4807-a6fb-c7706618909a" class="mb-14">
+                <div id="d713f06a-f09d-4fd9-821d-798097a5491e" class="card p-8" data-aos="fade-up">
+                    <h3 id="d1e268ba-a0c6-455c-a294-2411c4feab12" class="text-2xl font-bold mb-4">std::weak_ptr</h3>
+                    <div id="f3b1c8fc-8721-41ad-9d86-757d7567336c" class="flex flex-col md:flex-row gap-8">
+                        <div id="d9149c3c-9c7f-4946-b41f-75c40e2fb10e" class="md:w-1/3">
+                            <div id="e79d16f8-04dd-44b8-ad36-c8daf72153ee" class="mb-4">
+                                <h4 id="c9c453e1-1382-402c-85d7-b387e6536b57" class="text-lg font-semibold mb-2">原理</h4>
+                                <p id="ea06f77c-a4d7-4551-8530-fcc9eca6ff49" class="text-gray-700">弱引用，不增加引用计数，用于解决shared_ptr可能的循环引用问题。</p>
+                            </div>
+                            <div id="ccc44caa-12a5-42f3-bf83-aa23d6abe48d">
+                                <h4 id="c9d2c0ab-d25b-40b3-91dc-cc87bbfe0d5a" class="text-lg font-semibold mb-2">实现要点</h4>
+                                <ul id="e0865a00-dac6-4e0d-be8d-ef8482b9cb56" class="list-disc list-inside text-gray-700">
+                                    <li id="f386026c-3a7c-4a9b-9388-104426a2e157">不增加引用计数</li>
+                                    <li id="e65ab97d-b433-4328-8b7c-a3df083ef2dd">可以从shared_ptr创建</li>
+                                    <li id="daa0ec55-e1cb-4a85-b3be-3a37d81df98f">提供lock()方法来获取shared_ptr</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div id="a633ae3e-422c-4417-afd4-57e40d173e33" class="md:w-2/3">
+                            <h4 id="a1d91d6e-f2ab-4623-bce4-f917e098d54b" class="text-lg font-semibold mb-2">简化的实现示例（基于前面的shared_ptr）：</h4>
+                            <pre id="c1f4054c-a88a-410c-b319-56eb9a118cb4"><code class="language-cpp">template &lt;typename T&gt;
+class weak_ptr {
+private:
+    T* ptr;
+    size_t* ref_count;
+
+public:
+    weak_ptr() : ptr(nullptr), ref_count(nullptr) {}
+    weak_ptr(const shared_ptr&lt;T&gt;& sp) : ptr(sp.ptr), ref_count(sp.ref_count) {}
+
+    shared_ptr&lt;T&gt; lock() const {
+        if (expired()) {
+            return shared_ptr&lt;T&gt;();
+        }
+        return shared_ptr&lt;T&gt;(*this);
+    }
+
+    bool expired() const {
+        return ref_count == nullptr || *ref_count == 0;
+    }
+};</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="bf3a564e-4c00-4df1-859f-9e92b8b01154" class="mb-20">
+            <div id="cade686e-4b83-4da9-9d6e-de293dbbdcdb" data-aos="fade-up">
+                <h2 id="d7833907-e26f-416a-b7f0-c34d17db0048" class="section-title">智能指针的优势与注意事项</h2>
+            </div>
+
+            <div id="b44a83d2-bea0-4af9-bddb-f801b60b9ae8" class="bento-grid mb-12">
+                <div id="d6c8793e-30a2-40ef-92b2-215d816f232a" class="col-span-12 md:col-span-6" data-aos="fade-right">
+                    <div id="a7892153-a30c-4981-a13f-246e828ff2e2" class="card p-6 h-full">
+                        <h3 id="d35a9524-c7eb-4282-9622-672471dde588" class="text-2xl font-bold mb-4">
+                            <span class="text-blue-600">智能指针</span>的优势
+                        </h3>
+                        <div id="d1b02239-4bcc-421a-953e-d6d390d46baa" class="mb-8" data-aos="fade-up" data-aos-delay="100">
+                            <div id="a3a27ebc-4d0c-4a13-ae6f-50f35cf10b53">
+                                <div id="eebb6bdf-b7f9-44b9-8273-a23b92533c17" class="flex items-center gap-3 mb-3">
+                                    <i id="af82a292-cb85-4f49-a594-2b6f7f1d4c3c" class="fas fa-check-circle text-green-500"></i>
+                                    <h4 id="b3c09074-ef6f-4cfc-90e3-65ccd25f7086" class="font-semibold text-lg">自动内存管理</h4>
+                                </div>
+                                <p id="b70c46c1-2797-4131-8d76-0a0aa3761e9b" class="text-gray-700 pl-8">防止内存泄漏和多重释放。</p>
+                            </div>
+                        </div>
+                        
+                        <div id="d5b46e67-651f-4c83-b72e-4af7695bda43" class="mb-8" data-aos="fade-up" data-aos-delay="200">
+                            <div id="ee7359c9-5da3-4a2c-8765-fbce1a5c2c0a">
+                                <div id="e1bda9bb-9ef7-4a15-abf2-6569cf90a44b" class="flex items-center gap-3 mb-3">
+                                    <i id="a662fa78-a2bd-43df-93c3-660cda47eb3d" class="fas fa-check-circle text-green-500"></i>
+                                    <h4 id="b6119a4c-8eda-4d97-8d52-0188ea53a6d9" class="font-semibold text-lg">异常安全</h4>
+                                </div>
+                                <p id="e15f8fe9-de32-444a-98a1-630a41d3ec0a" class="text-gray-700 pl-8">即使在异常发生时也能确保资源被正确释放。</p>
+                            </div>
+                        </div>
+                        
+                        <div id="c1eb3c38-48f1-4d68-818a-e143e66b8676" class="mb-8" data-aos="fade-up" data-aos-delay="300">
+                            <div id="c778315a-29b5-412c-8682-34c8d53381ee">
+                                <div id="c4575c6f-6ad6-4975-83eb-e59206ecefea" class="flex items-center gap-3 mb-3">
+                                    <i id="d3bbf0c1-3fb3-4a08-b725-40d9203d99a9" class="fas fa-check-circle text-green-500"></i>
+                                    <h4 id="f3561a35-cfc7-425a-901a-65c8e45b5a3d" class="font-semibold text-lg">语义清晰</h4>
+                                </div>
+                                <p id="a1b2e1fc-8ad1-4a45-adfe-8d97f1f71c41" class="text-gray-700 pl-8">unique_ptr表示独占所有权，shared_ptr表示共享所有权。</p>
+                            </div>
+                        </div>
+                        
+                        <div id="d51df1f9-b18e-41bd-91e9-2fad58256fa5" data-aos="fade-up" data-aos-delay="400">
+                            <div id="d40bcb2e-b74e-4f2c-b856-f6ae0ab0fec6">
+                                <div id="cd456146-75b5-421e-a323-20a144f01416" class="flex items-center gap-3 mb-3">
+                                    <i id="a67ab980-e8d8-406f-905b-891e17e95b5c" class="fas fa-check-circle text-green-500"></i>
+                                    <h4 id="b5ed164a-82c9-445d-bb31-96c01b4edf27" class="font-semibold text-lg">提高代码质量</h4>
+                                </div>
+                                <p id="e10b7f61-aef6-49a7-a7e7-7a8654e6f65d" class="text-gray-700 pl-8">减少手动内存管理的错误。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="c4a00cd4-ef32-46db-b5a4-6afdadf1172d" class="col-span-12 md:col-span-6" data-aos="fade-left">
+                    <div id="c03249d1-96c9-4754-acfc-8f890ff2590f" class="card p-6 h-full">
+                        <h3 id="ba7eb368-0d3c-4b40-9e35-0d2ca482382e" class="text-2xl font-bold mb-4">
+                            <span class="text-red-600">注意事项</span>
+                        </h3>
+                        <div id="b954745c-c808-4390-b70f-09058c712429" class="mb-8" data-aos="fade-up" data-aos-delay="100">
+                            <div id="c9e6c2e0-a97a-40ac-9480-064071a15d4e">
+                                <div id="c3eb2042-636e-48a8-abb9-20bbdfc914b4" class="flex items-center gap-3 mb-3">
+                                    <i id="ad266733-df3e-4a92-bd8a-5c9c339b020c" class="fas fa-exclamation-triangle text-yellow-500"></i>
+                                    <h4 id="f716f61f-6ddf-4ecc-9688-05ef61b6c0ec" class="font-semibold text-lg">避免使用裸指针</h4>
+                                </div>
+                                <p id="f71a2f0d-07ce-40f6-9b73-dfcff28ebbda" class="text-gray-700 pl-8">尽可能使用智能指针来管理动态分配的内存。</p>
+                            </div>
+                        </div>
+                        
+                        <div id="b567cffa-680e-47fd-9c89-50c66520a3a1" class="mb-8" data-aos="fade-up" data-aos-delay="200">
+                            <div id="d0090ddf-aa89-450e-92db-9affbe3ed7cf">
+                                <div id="ca7793b0-043e-4d8f-9ba2-5366a4602c28" class="flex items-center gap-3 mb-3">
+                                    <i id="d22f826f-68ce-4bcc-ace0-d1fc7866d82e" class="fas fa-exclamation-triangle text-yellow-500"></i>
+                                    <h4 id="adb7f9c5-38e1-4cbc-9c11-ef086f399d3b" class="font-semibold text-lg">正确选择智能指针类型</h4>
+                                </div>
+                                <p id="e7d92da1-80bc-499e-b64b-b9e073c0fb4c" class="text-gray-700 pl-8">根据资源的所有权语义选择合适的智能指针。</p>
+                            </div>
+                        </div>
+                        
+                        <div id="ee9a3893-5dab-4cba-84c1-2947996d486a" class="mb-8" data-aos="fade-up" data-aos-delay="300">
+                            <div id="ba7ed792-2bf1-48c1-ab1e-1a55259ce358">
+                                <div id="c70814a0-4c6d-4936-91d6-730c580e2a95" class="flex items-center gap-3 mb-3">
+                                    <i id="fa959c11-16c7-4519-af3a-99a9b397fcc3" class="fas fa-exclamation-triangle text-yellow-500"></i>
+                                    <h4 id="dca12167-e1d1-44de-8b8f-65ab9af84532" class="font-semibold text-lg">注意循环引用</h4>
+                                </div>
+                                <p id="b325e527-1d07-4ddd-92ac-5cd862ab0087" class="text-gray-700 pl-8">使用weak_ptr来打破shared_ptr可能形成的循环引用。</p>
+                            </div>
+                        </div>
+                        
+                        <div id="f5cf161f-14cd-459c-85a2-39aa856c08ac" data-aos="fade-up" data-aos-delay="400">
+                            <div id="b3e20399-3429-429a-bfa6-d58b1101ab84">
+                                <div id="cf626537-d0f3-4e8c-9f97-96ae1c5bd30c" class="flex items-center gap-3 mb-3">
+                                    <i id="b2d9856c-4283-4dcc-89cb-cb06c0d9d8d6" class="fas fa-exclamation-triangle text-yellow-500"></i>
+                                    <h4 id="c383bc85-9baf-42f5-8d44-86d454499ff6" class="font-semibold text-lg">不要混用不同类型的智能指针</h4>
+                                </div>
+                                <p id="c0180998-b820-4656-9bb0-21b16b0e0fb9" class="text-gray-700 pl-8">例如，不要将同一块内存同时交给unique_ptr和shared_ptr管理。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="e7ee43de-7c9f-4337-a1dc-3f671de80d1c" class="mb-20">
+            <div id="c7726aba-8ef6-4e23-8c57-580576be3e02" data-aos="fade-up">
+                <h2 id="b0a860ea-3c17-4070-955e-4fa615442ad7" class="section-title">智能指针类型比较</h2>
+            </div>
+
+            <div id="b6608f71-d06c-4c9c-acbf-9fc2cea95a32" class="card p-8" data-aos="fade-up">
+                <div id="d95dd6b5-4c20-4b6c-adb3-2cdd4ae35d21" class="w-full h-96">
+                    <div id="f184cccd-e236-4628-ba1e-48da0b5cfeb0" class="h-full w-full"></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="ca0ec807-e5d9-4fc2-a7c9-2a36ff391808">
+            <div id="b3912882-21a2-42cd-a56c-e54897b3e1e5" class="card p-8 gradient-bg" data-aos="fade-up">
+                <div id="a555656b-fc10-405e-9d60-77f3e9f6fe62" class="text-center">
+                    <h2 id="e94e5b57-114c-4d26-b168-d32cdcae0f68" class="text-2xl font-bold mb-4">总结</h2>
+                    <p id="df1c07ff-2d15-496d-afb3-e99e90f8581a" class="text-gray-700 max-w-3xl mx-auto">
+                        智能指针的实现原理体现了C++对资源管理的高度抽象和自动化，大大提高了C++程序的安全性和可靠性。通过深入理解智能指针的工作原理，开发者可以更好地利用这一强大工具，编写出更加健壮和高效的C++代码。
+                    </p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer id="c8e8513e-9720-4817-acd7-e8b0b8c4a2d1" class="w-full py-8 px-4 md:px-8 lg:px-16 bg-gray-100">
+        <div id="c3686fee-8f24-4cfb-9c14-c9295658669c" class="max-w-7xl mx-auto text-center text-gray-500 text-sm">
+            <p id="b10f8899-115a-42cf-9d14-67686ce152e0">© 2025 C++ Smart Pointers Implementation Principles</p>
+            <p id="d966571e-29cb-4de3-89d9-4d5c11690ce9" class="mt-2">Images from <a href="https://unsplash.com" class="text-blue-600 hover:text-blue-800">Unsplash</a></p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize AOS animation
+            AOS.init({
+                once: true,
+                duration: 800,
+                easing: 'ease-out'
+            });
+            
+            // Initialize ECharts
+            const chartDom = document.getElementById('f184cccd-e236-4628-ba1e-48da0b5cfeb0');
+            const myChart = echarts.init(chartDom);
+            
+            const option = {
+                title: {
+                    text: '智能指针类型比较',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                legend: {
+                    data: ['std::unique_ptr', 'std::shared_ptr', 'std::weak_ptr'],
+                    bottom: 10
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '15%',
+                    top: '15%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['内存开销', '性能', '所有权语义', '线程安全', '易用性']
+                },
+                yAxis: {
+                    type: 'value',
+                    max: 100,
+                    name: '评分'
+                },
+                series: [
+                    {
+                        name: 'std::unique_ptr',
+                        type: 'bar',
+                        data: [95, 98, 90, 70, 80],
+                        itemStyle: {
+                            color: '#3b82f6'
+                        }
+                    },
+                    {
+                        name: 'std::shared_ptr',
+                        type: 'bar',
+                        data: [75, 85, 95, 90, 95],
+                        itemStyle: {
+                            color: '#8b5cf6'
+                        }
+                    },
+                    {
+                        name: 'std::weak_ptr',
+                        type: 'bar',
+                        data: [85, 80, 75, 70, 65],
+                        itemStyle: {
+                            color: '#10b981'
+                        }
+                    }
+                ]
+            };
+            
+            myChart.setOption(option);
+            
+            // Handle window resize for responsive chart
+            window.addEventListener('resize', function() {
+                myChart.resize();
+            });
+            
+            // Scroll indicator
+            window.addEventListener('scroll', function() {
+                const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+                const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+                const scrolled = (winScroll / height) * 100;
+                document.getElementById('d20bbd13-ad8c-4a5f-ba7b-3df94f19bb10').style.width = scrolled + "%";
+            });
+        });
+    </script>
+</body>
+</html>
