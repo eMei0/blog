@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ STL实现原理详解</title>
+    <link href="https://fastly.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://fastly.jsdelivr.net/npm/framer-motion@10.12.16/dist/framer-motion.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/components/prism-cpp.min.js"></script>
+    <style>
+        :root {
+            --primary: #10b981;
+            --secondary: #3b82f6;
+            --accent: #8b5cf6;
+            --background: #0f172a;
+            --foreground: #f8fafc;
+            --card: #1e293b;
+            --border: #334155;
+            --muted: #64748b;
+        }
+        
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--foreground);
+            overflow-x: hidden;
+        }
+        
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .bento-card {
+            background-color: var(--card);
+            border-radius: 1rem;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid var(--border);
+        }
+        
+        .bento-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .gradient-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0.1;
+            z-index: 0;
+            pointer-events: none;
+        }
+        
+        .primary-gradient {
+            background: linear-gradient(135deg, var(--primary) 0%, rgba(16, 185, 129, 0) 70%);
+        }
+        
+        .secondary-gradient {
+            background: linear-gradient(135deg, var(--secondary) 0%, rgba(59, 130, 246, 0) 70%);
+        }
+        
+        .accent-gradient {
+            background: linear-gradient(135deg, var(--accent) 0%, rgba(139, 92, 246, 0) 70%);
+        }
+        
+        .giant-number {
+            font-size: 8rem;
+            font-weight: 800;
+            line-height: 1;
+            opacity: 0.15;
+            position: absolute;
+            bottom: -1.5rem;
+            right: 1rem;
+            z-index: 0;
+        }
+        
+        .giant-text {
+            font-size: 4rem;
+            font-weight: 800;
+            line-height: 1;
+            background: linear-gradient(135deg, var(--foreground) 0%, var(--muted) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .en-accent {
+            color: var(--muted);
+            font-size: 0.9rem;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            display: block;
+            margin-top: 0.5rem;
+        }
+        
+        code {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9em;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 0.2em 0.4em;
+            border-radius: 0.3em;
+        }
+        
+        pre {
+            background-color: rgba(0, 0, 0, 0.3) !important;
+            border-radius: 0.5rem !important;
+            padding: 1rem !important;
+            overflow-x: auto !important;
+            margin: 1.5rem 0 !important;
+            border: 1px solid var(--border) !important;
+        }
+        
+        pre code {
+            background-color: transparent !important;
+            padding: 0 !important;
+        }
+        
+        .animate-on-scroll {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        
+        .animate-on-scroll.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .thin-line {
+            height: 1px;
+            background-color: var(--border);
+            margin: 1.5rem 0;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 300px;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 1200px) {
+            .bento-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .bento-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+                padding: 1rem;
+            }
+            
+            .bento-card {
+                padding: 1.5rem;
+            }
+            
+            .giant-text {
+                font-size: 2.5rem;
+            }
+            
+            .giant-number {
+                font-size: 5rem;
+            }
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <header id="b6983b39-b0df-4031-bca5-8be2df27b45e" class="flex flex-col items-center justify-center min-h-screen py-20 px-4 relative">
+        <div id="e6c9878a-421a-4fc5-add6-a4943c20229a" class="gradient-overlay primary-gradient"></div>
+        <div id="ef22aa05-fe59-45fb-9259-3ca38f773977" class="text-center z-10 animate-on-scroll">
+            <h1 id="abc4e10e-c6be-4c7f-a07f-dcbe7d1a3c7d" class="text-6xl md:text-8xl font-bold mb-4">
+                C++ <span class="text-primary">STL</span>
+            </h1>
+            <p id="acec8636-939d-4ec7-80dc-d03680bf93c5" class="text-xl md:text-2xl text-gray-300 mb-8">
+                标准模板库 <span class="en-accent">STANDARD TEMPLATE LIBRARY</span>
+            </p>
+            <p id="d850e69e-df05-4c9b-a39e-fdcc51f49a96" class="text-lg md:text-xl max-w-2xl mx-auto">
+                深入解析STL的实现原理、设计思想与核心组件，揭秘C++标准库的技术精髓
+            </p>
+        </div>
+        <div id="f4be8a73-c109-4d61-a879-4cb4d37e91ed" class="absolute bottom-10">
+            <a href="#overview" class="text-gray-400 animate-bounce flex flex-col items-center">
+                <span>向下滚动了解更多</span>
+                <i class="fas fa-chevron-down mt-2"></i>
+            </a>
+        </div>
+    </header>
+
+    <section id="overview" class="py-20 relative">
+        <div id="f9874e29-3677-44f3-8284-e18cc8b6fc9b" class="bento-grid">
+            <div id="c6ed4622-24ef-4faa-914a-24c81f63fc29" class="bento-card col-span-12 animate-on-scroll">
+                <div id="e88f60fe-3a09-48ea-b27f-258cb38693a8" class="gradient-overlay secondary-gradient"></div>
+                <h2 id="a6dc870a-8d4e-43ce-9a88-0891741e36e2" class="text-3xl font-bold mb-4 relative z-10">STL概述</h2>
+                <p id="f22171df-a58c-4d4c-be01-880c52c1390a" class="text-lg relative z-10">
+                    STL(Standard Template Library)是C++标准库的重要组成部分，它提供了一系列通用的模板类和函数，用于数据存储和处理。STL的设计基于泛型编程思想，通过模板技术实现了算法与数据结构的分离，提高了代码的复用性和可扩展性。
+                </p>
+                <p id="de32cf27-05f8-4e85-8c87-bffbde10433f" class="text-lg mt-4 relative z-10">
+                    STL的核心理念是：<strong>将数据结构和算法分离，通过迭代器建立两者之间的桥梁</strong>。这种设计使得算法可以独立于具体的数据结构，大大提高了代码的复用性和可维护性。
+                </p>
+            </div>
+
+            <div id="e6c3e0dc-3318-4dbf-830a-24c93ebdcedb" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="a7793652-eaa3-426a-8f0a-cbc3d2dfbc6b" class="gradient-overlay primary-gradient"></div>
+                <div id="ddb15d6c-f039-47ac-a3cf-1794c92c2f7f" class="giant-text mb-6">核心组件</div>
+                <span id="cc81ec66-f8a3-40c9-9e76-4b888c723e9f" class="en-accent mb-6">CORE COMPONENTS</span>
+                <ul id="ffbfdc5e-97da-4775-b91e-8ca05877fac8" class="space-y-3 relative z-10">
+                    <li id="a9fe0f1f-58f9-4510-b5a6-b6f55e46cc90" class="flex items-start">
+                        <i class="fas fa-cube text-primary mt-1 mr-3"></i>
+                        <span><strong>容器 (Containers)</strong> - 用于存储数据的数据结构</span>
+                    </li>
+                    <li id="e64b15c2-de26-4bcd-91fb-878c73fd261e" class="flex items-start">
+                        <i class="fas fa-exchange-alt text-primary mt-1 mr-3"></i>
+                        <span><strong>迭代器 (Iterators)</strong> - 连接算法与容器的桥梁</span>
+                    </li>
+                    <li id="bd2c6c29-2142-4f6c-9629-6319dde647e6" class="flex items-start">
+                        <i class="fas fa-cogs text-primary mt-1 mr-3"></i>
+                        <span><strong>算法 (Algorithms)</strong> - 操作容器中数据的函数</span>
+                    </li>
+                    <li id="bf7987e1-9e14-4edc-bf01-40892919d0d9" class="flex items-start">
+                        <i class="fas fa-code text-primary mt-1 mr-3"></i>
+                        <span><strong>函数对象 (Functors)</strong> - 行为类似函数的对象</span>
+                    </li>
+                    <li id="c43f5b9e-f1c7-4342-bab6-2b48c1f0e9a9" class="flex items-start">
+                        <i class="fas fa-plug text-primary mt-1 mr-3"></i>
+                        <span><strong>适配器 (Adapters)</strong> - 修改其他组件接口的工具</span>
+                    </li>
+                    <li id="a14226cd-377b-4b15-b88b-264ed7d6beed" class="flex items-start">
+                        <i class="fas fa-memory text-primary mt-1 mr-3"></i>
+                        <span><strong>分配器 (Allocators)</strong> - 管理内存分配的对象</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div id="fae873f2-6cb3-4621-af87-bc51b28f9ca4" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="e0747849-606a-4661-9cff-6c9577a668c6" class="gradient-overlay accent-gradient"></div>
+                <div id="ed4cfd3c-eff9-4322-bc22-af6036ed10cb" class="chart-container"></div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const chartDom = document.getElementById('ed4cfd3c-eff9-4322-bc22-af6036ed10cb');
+                        const myChart = echarts.init(chartDom);
+                        const option = {
+                            backgroundColor: 'transparent',
+                            title: {
+                                text: '容器类型及其时间复杂度',
+                                left: 'center',
+                                textStyle: {
+                                    color: '#f8fafc'
+                                }
+                            },
+                            tooltip: {
+                                trigger: 'item',
+                                formatter: '{b}: O({c})'
+                            },
+                            legend: {
+                                orient: 'vertical',
+                                left: 'left',
+                                textStyle: {
+                                    color: '#f8fafc'
+                                }
+                            },
+                            radar: {
+                                indicator: [
+                                    { name: '随机访问', max: 5 },
+                                    { name: '头部插入', max: 5 },
+                                    { name: '尾部插入', max: 5 },
+                                    { name: '中间插入', max: 5 },
+                                    { name: '查找元素', max: 5 }
+                                ],
+                                splitArea: {
+                                    areaStyle: {
+                                        color: 'rgba(255, 255, 255, 0.05)'
+                                    }
+                                },
+                                axisLine: {
+                                    lineStyle: {
+                                        color: 'rgba(255, 255, 255, 0.2)'
+                                    }
+                                },
+                                splitLine: {
+                                    lineStyle: {
+                                        color: 'rgba(255, 255, 255, 0.2)'
+                                    }
+                                }
+                            },
+                            series: [
+                                {
+                                    name: '容器性能',
+                                    type: 'radar',
+                                    data: [
+                                        {
+                                            value: [1, 5, 1, 5, 1],
+                                            name: 'vector',
+                                            itemStyle: {
+                                                color: '#10b981'
+                                            }
+                                        },
+                                        {
+                                            value: [5, 1, 1, 1, 4],
+                                            name: 'list',
+                                            itemStyle: {
+                                                color: '#3b82f6'
+                                            }
+                                        },
+                                        {
+                                            value: [5, 3, 3, 3, 1.7],
+                                            name: 'map',
+                                            itemStyle: {
+                                                color: '#8b5cf6'
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        };
+                        myChart.setOption(option);
+                        window.addEventListener('resize', function() {
+                            myChart.resize();
+                        });
+                    });
+                </script>
+            </div>
+        </div>
+    </section>
+
+    <section id="containers" class="py-20 bg-gray-900 relative">
+        <div id="b91b4b79-8e42-46c2-9006-f3af90f39c63" class="bento-grid">
+            <div id="b93c2e09-acf2-4018-a98a-f9bd1a260764" class="bento-card col-span-12 animate-on-scroll">
+                <div id="f7817309-9504-49f8-bece-78731902a0a5" class="gradient-overlay primary-gradient"></div>
+                <div id="c33c7bf8-34eb-4152-aa40-4520eefce78e" class="giant-number">02</div>
+                <h2 id="fe080d1f-6778-4438-aa3f-3321664d8648" class="text-4xl font-bold mb-6 relative z-10">容器实现原理</h2>
+                <p id="f907f671-550c-474b-b3dc-8ba1a6e1ba37" class="text-lg relative z-10">
+                    STL容器是存储数据的核心组件，不同容器采用不同的数据结构实现，适用于不同的使用场景。以下我们深入探讨各种容器的核心实现原理。
+                </p>
+            </div>
+
+            <div id="c0c7ce98-b670-48d9-8032-ca89d0946c12" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="a6dab5d8-a6a3-4ced-a088-7af974f0e417" class="gradient-overlay secondary-gradient"></div>
+                <h3 id="b9631279-f08e-4937-91e4-db151c0384cb" class="text-2xl font-bold mb-4 relative z-10">vector实现原理</h3>
+                <span id="eef6c080-9c8c-43b7-9168-b85bd64247e8" class="en-accent mb-4">DYNAMIC ARRAY</span>
+                <p id="efca5883-5035-46be-a9e7-ba89fb2097f2" class="mb-4 relative z-10">
+                    <code>vector</code>是C++中最常用的容器之一，本质上是一个动态数组，支持快速随机访问和尾部插入/删除操作。
+                </p>
+                
+                <div id="a6b4230c-ba67-4b6b-b664-91368b0f3f3c" class="thin-line"></div>
+                
+                <h4 id="bb8f826f-895d-4996-a146-1699b890e768" class="font-semibold mt-4 mb-2">核心实现细节：</h4>
+                <ul id="e648ea0e-d20a-48d9-bea2-c5d274e21f57" class="space-y-3 relative z-10">
+                    <li id="e83961e0-cebc-47b2-b9d2-cba6bc2131bb">
+                        <strong>内存管理</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="c05642c7-d91d-4b52-a2d8-2b623221efc0">维护三个指针：<code>start</code>、<code>finish</code>和<code>end_of_storage</code></li>
+                            <li id="edabfa0c-c918-4892-828d-0c522f4ffc51">容量(capacity)等于<code>end_of_storage - start</code></li>
+                            <li id="d3d3bee6-66a7-42ae-b4d0-41efeb5e9b20">大小(size)等于<code>finish - start</code></li>
+                        </ul>
+                    </li>
+                    <li id="d91064af-5478-43ed-845a-43193c64e80e">
+                        <strong>动态扩容</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="c793d8d8-3dcf-42b1-9186-a553e2c96dae">当元素数量达到容量上限时，分配更大的内存块（通常是当前容量的1.5倍或2倍）</li>
+                            <li id="d40a6d86-85ae-431e-9e2c-92049a4e719f">将现有元素复制或移动到新内存块</li>
+                            <li id="da3f76da-826c-453f-8b8c-fca7c2bebc08">释放旧内存</li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <div id="d21e301f-fe54-4081-a447-a63657352820" class="mt-4">
+                    <img src="https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80" alt="Vector visualization" class="rounded-lg shadow-lg w-full h-40 object-cover opacity-70">
+                </div>
+            </div>
+
+            <div id="c06f04c4-bd06-4b4b-9754-8b95a42d86e7" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="b0ef14d5-3d97-4ca6-b3fd-e049a6d583a1" class="gradient-overlay accent-gradient"></div>
+                <h3 id="af980fde-e250-4e30-ae06-aa0575222a25" class="text-2xl font-bold mb-4 relative z-10">list实现原理</h3>
+                <span id="a1ca4ac7-f062-4ee3-861a-3ab36f75928d" class="en-accent mb-4">DOUBLY LINKED LIST</span>
+                <p id="beb8acad-0c92-4ef0-b97c-6ae0e7c75ae7" class="mb-4 relative z-10">
+                    <code>list</code>是一个双向链表，提供O(1)复杂度的插入和删除操作，但不支持随机访问。
+                </p>
+                
+                <div id="dca786c8-e524-4f5a-ba97-bda881ea4096" class="thin-line"></div>
+                
+                <h4 id="df370574-0e57-41e2-86b8-a6a6ded97880" class="font-semibold mt-4 mb-2">核心实现细节：</h4>
+                <ul id="bfb47cf2-e9db-401c-a6d1-d1c9fbf83f8b" class="space-y-3 relative z-10">
+                    <li id="ea9c979a-b0c9-4191-89a3-bb84d7f24fee">
+                        <strong>节点结构</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="dbf2930f-db2a-43bb-97cc-6d638e59eb6b">每个节点包含数据和两个指针（前向和后向）</li>
+                            <li id="d01aadd4-f3c3-4d2e-a95e-da7f4eafa97b">通常实现为带哨兵节点的循环链表</li>
+                        </ul>
+                    </li>
+                    <li id="bfe6c640-5ec1-4af1-bc61-e8439efb9d24">
+                        <strong>内存管理</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="e9b922b9-9081-4d8a-896f-1b971ea171b5">节点内存不连续，需要单独分配</li>
+                            <li id="c2090ead-5665-411a-8a48-fa242c868c39">通常使用内存池技术优化频繁的内存分配和释放</li>
+                        </ul>
+                    </li>
+                    <li id="e630abc0-8c8a-4a7f-8b9c-8bf5479ec5f4">
+                        <strong>迭代器</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="dc009ab4-f889-4b31-a19c-2dee7190b226">双向迭代器，支持++和--操作</li>
+                            <li id="ac4fbdc8-a2e3-481c-8e16-af956c3f52dc">迭代器实际上封装了指向节点的指针</li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <pre class="language-cpp relative z-10"><code>// list节点简化示例
+template &lt;typename T&gt;
+struct __list_node {
+    __list_node* prev;
+    __list_node* next;
+    T data;
+};</code></pre>
+            </div>
+
+            <div id="f408a914-5347-442f-a4ac-aae40817de3d" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="e512bfd1-8661-43c9-8a38-c04d8eec9940" class="gradient-overlay primary-gradient"></div>
+                <h3 id="bdd296d4-8e52-40d0-b608-9eb1c2d9f0cf" class="text-2xl font-bold mb-4 relative z-10">map/set实现原理</h3>
+                <span id="e7457e30-1cf9-4eb9-939f-d3dec4e66b7c" class="en-accent mb-4">RED-BLACK TREE</span>
+                <p id="f8c6a63c-ca82-4b59-b25d-49b4f986497b" class="mb-4 relative z-10">
+                    <code>map</code>和<code>set</code>通常基于红黑树实现，提供O(log n)的查找、插入和删除复杂度。
+                </p>
+                
+                <div id="e341ce59-1777-4b9e-861a-c306ac16e1a4" class="thin-line"></div>
+                
+                <h4 id="f9b01c07-49ec-4900-b693-c23039eb763b" class="font-semibold mt-4 mb-2">红黑树特性：</h4>
+                <ul id="c8530c4a-8db9-4f67-a340-c5e549745b15" class="space-y-2 relative z-10">
+                    <li id="b0e7b6b5-c59d-4ab2-8d2d-fd0da63b45b9">自平衡二叉搜索树</li>
+                    <li id="a6beaea1-bf83-4a56-819d-f9dc7ba5550d">每个节点要么是红色，要么是黑色</li>
+                    <li id="f80ff8e5-97af-41de-b061-0c3a156f86cc">根节点是黑色</li>
+                    <li id="c27516b9-2c17-4e93-bfd0-7e246d62a492">红色节点的子节点必须是黑色</li>
+                    <li id="f657a45f-8873-4c4d-928a-c3680e72267b">从任一节点到其叶子的所有路径都包含相同数目的黑色节点</li>
+                </ul>
+                
+                <div id="d7312e6d-8abb-41b6-b56b-bff97f29ea8d" class="mt-4">
+                    <div id="ab531f03-24bd-42e4-845b-ff6b77cdc050" class="chart-container" style="height: 250px;"></div>
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const chartDom = document.getElementById('ab531f03-24bd-42e4-845b-ff6b77cdc050');
+                            const myChart = echarts.init(chartDom);
+                            const option = {
+                                backgroundColor: 'transparent',
+                                series: [
+                                    {
+                                        type: 'graph',
+                                        layout: 'force',
+                                        roam: false,
+                                        label: {
+                                            show: true,
+                                            color: '#fff'
+                                        },
+                                        data: [
+                                            { name: '15', x: 300, y: 50, itemStyle: { color: '#000' } },
+                                            { name: '10', x: 150, y: 120, itemStyle: { color: '#e53e3e' } },
+                                            { name: '20', x: 450, y: 120, itemStyle: { color: '#000' } },
+                                            { name: '5', x: 75, y: 190, itemStyle: { color: '#000' } },
+                                            { name: '12', x: 225, y: 190, itemStyle: { color: '#000' } },
+                                            { name: '18', x: 375, y: 190, itemStyle: { color: '#e53e3e' } },
+                                            { name: '25', x: 525, y: 190, itemStyle: { color: '#e53e3e' } }
+                                        ],
+                                        links: [
+                                            { source: '15', target: '10' },
+                                            { source: '15', target: '20' },
+                                            { source: '10', target: '5' },
+                                            { source: '10', target: '12' },
+                                            { source: '20', target: '18' },
+                                            { source: '20', target: '25' }
+                                        ],
+                                        lineStyle: {
+                                            color: 'rgba(255, 255, 255, 0.4)',
+                                            width: 2,
+                                            curveness: 0
+                                        }
+                                    }
+                                ]
+                            };
+                            myChart.setOption(option);
+                            window.addEventListener('resize', function() {
+                                myChart.resize();
+                            });
+                        });
+                    </script>
+                </div>
+            </div>
+
+            <div id="c5c25f5e-e7c2-420d-8494-dd53c4530af6" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="d06c88fa-b70b-4c9c-baa6-6c95d7d13bbc" class="gradient-overlay accent-gradient"></div>
+                <h3 id="eaa9793a-6603-4889-be6e-46cad3a3d436" class="text-2xl font-bold mb-4 relative z-10">unordered_map/set实现原理</h3>
+                <span id="bcbd7526-0f9c-4b49-a058-10afd89f3633" class="en-accent mb-4">HASH TABLE</span>
+                <p id="e7e2948b-7608-4cfa-9eae-c8159bb46f7c" class="mb-4 relative z-10">
+                    无序关联容器基于哈希表实现，提供平均O(1)的查找、插入和删除复杂度。
+                </p>
+                
+                <div id="b7b027eb-c94d-4a00-b370-3772f197144e" class="thin-line"></div>
+                
+                <h4 id="a40b9d28-8a68-4f65-95bd-5d6843149268" class="font-semibold mt-4 mb-2">核心实现细节：</h4>
+                <ul id="f23fd8e8-c40c-408b-8d0e-c2a0225cbd39" class="space-y-3 relative z-10">
+                    <li id="f1fc4bcd-1e3c-495e-9f7a-c6363df45c54">
+                        <strong>哈希表结构</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="fd1c5c35-2a00-4dff-be87-f5a7eac11d06">一个桶(bucket)数组</li>
+                            <li id="c79f04df-416c-4a60-96ac-0c7dfa7c2b84">每个桶维护一个链表，用于处理哈希冲突</li>
+                        </ul>
+                    </li>
+                    <li id="e684954e-3901-4fd9-adf0-29fc556291c5">
+                        <strong>哈希函数</strong>：将键映射到桶索引</li>
+                    <li id="da4c92ce-b9d0-474e-bcf7-c17f200b7a86">
+                        <strong>再哈希(rehash)</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="e304f2b3-053a-42a6-a9f3-30c1a32591a2">当负载因子超过阈值时发生</li>
+                            <li id="e161ab49-fd21-4dd5-b827-3e95f3b81e80">创建更多的桶并重新分配元素</li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <pre class="language-cpp relative z-10"><code>// 哈希表插入操作伪代码
+template &lt;class Key, class Value&gt;
+void unordered_map&lt;Key, Value&gt;::insert(const pair&lt;Key, Value&gt;& kv) {
+    if (load_factor() > max_load_factor())
+        rehash();
+    
+    size_t bucket_index = hash_function(kv.first) % bucket_count();
+    // 检查是否已存在
+    for (auto& elem : buckets[bucket_index]) {
+        if (elem.first == kv.first)
+            return; // 键已存在，不插入
+    }
+    
+    // 在对应桶的链表头部插入新元素
+    buckets[bucket_index].push_front(kv);
+    ++element_count;
+}</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <section id="iterators" class="py-20 relative">
+        <div id="e85902c7-94d0-4fc0-acfb-c6497a622ff9" class="bento-grid">
+            <div id="d19e6570-78d4-4a23-a22b-55945f68c138" class="bento-card col-span-12 animate-on-scroll">
+                <div id="bd9f3323-a160-46c7-b948-1a760955e7d0" class="gradient-overlay secondary-gradient"></div>
+                <div id="bed8688e-cb15-49d8-9abc-48708c190931" class="giant-number">03</div>
+                <h2 id="b36c73ea-6b48-4b5d-96f0-bb023172edac" class="text-4xl font-bold mb-6 relative z-10">迭代器实现原理</h2>
+                <p id="a3d69f10-f06c-4ec0-a855-da7018b08876" class="text-lg relative z-10">
+                    迭代器是STL中连接算法和容器的桥梁，提供了一种统一的方式来遍历不同类型的容器。不同容器的迭代器实现各不相同，但都遵循相同的接口规范。
+                </p>
+            </div>
+
+            <div id="f6244e2a-addf-493b-8552-5c2e18a2f346" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="ae60b1aa-fa37-4577-b6ac-5dcffce05a1b" class="gradient-overlay primary-gradient"></div>
+                <h3 id="b12d30d2-2e64-4dbb-b5a4-65a83b8a6868" class="text-2xl font-bold mb-4 relative z-10">迭代器类型</h3>
+                <div id="e5261be3-39c8-4111-b161-13659f0c3aa8" class="chart-container" style="height: 300px;"></div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const chartDom = document.getElementById('e5261be3-39c8-4111-b161-13659f0c3aa8');
+                        const myChart = echarts.init(chartDom);
+                        const option = {
+                            backgroundColor: 'transparent',
+                            tooltip: {
+                                trigger: 'item',
+                                formatter: '{b}: {c}'
+                            },
+                            series: [
+                                {
+                                    name: '迭代器类型',
+                                    type: 'funnel',
+                                    left: '10%',
+                                    top: 10,
+                                    bottom: 10,
+                                    width: '80%',
+                                    min: 0,
+                                    max: 100,
+                                    minSize: '0%',
+                                    maxSize: '100%',
+                                    sort: 'descending',
+                                    gap: 2,
+                                    label: {
+                                        show: true,
+                                        position: 'inside',
+                                        color: '#fff'
+                                    },
+                                    labelLine: {
+                                        length: 10,
+                                        lineStyle: {
+                                            width: 1,
+                                            type: 'solid'
+                                        }
+                                    },
+                                    itemStyle: {
+                                        borderColor: '#1e293b',
+                                        borderWidth: 1
+                                    },
+                                    emphasis: {
+                                        label: {
+                                            fontSize: 14
+                                        }
+                                    },
+                                    data: [
+                                        { value: 100, name: '输入迭代器', itemStyle: { color: '#10b981' } },
+                                        { value: 80, name: '输出迭代器', itemStyle: { color: '#3b82f6' } },
+                                        { value: 60, name: '前向迭代器', itemStyle: { color: '#8b5cf6' } },
+                                        { value: 40, name: '双向迭代器', itemStyle: { color: '#ec4899' } },
+                                        { value: 20, name: '随机访问迭代器', itemStyle: { color: '#f59e0b' } }
+                                    ]
+                                }
+                            ]
+                        };
+                        myChart.setOption(option);
+                        window.addEventListener('resize', function() {
+                            myChart.resize();
+                        });
+                    });
+                </script>
+                <table id="b6ac117a-8936-40b2-b1e8-0a857d57028c" class="w-full mt-4 relative z-10">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="py-2 text-left">迭代器类型</th>
+                            <th class="py-2 text-left">支持操作</th>
+                            <th class="py-2 text-left">示例容器</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        <tr class="border-b border-gray-800">
+                            <td class="py-2">输入迭代器</td>
+                            <td class="py-2">只读，单向，单遍扫描</td>
+                            <td class="py-2">istream_iterator</td>
+                        </tr>
+                        <tr class="border-b border-gray-800">
+                            <td class="py-2">输出迭代器</td>
+                            <td class="py-2">只写，单向，单遍扫描</td>
+                            <td class="py-2">ostream_iterator</td>
+                        </tr>
+                        <tr class="border-b border-gray-800">
+                            <td class="py-2">前向迭代器</td>
+                            <td class="py-2">读写，单向，多遍扫描</td>
+                            <td class="py-2">forward_list</td>
+                        </tr>
+                        <tr class="border-b border-gray-800">
+                            <td class="py-2">双向迭代器</td>
+                            <td class="py-2">读写，双向，多遍扫描</td>
+                            <td class="py-2">list, set, map</td>
+                        </tr>
+                        <tr>
+                            <td class="py-2">随机访问迭代器</td>
+                            <td class="py-2">读写，随机访问</td>
+                            <td class="py-2">vector, deque, array</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="fa97dcb5-4c2f-4465-9a00-361e00ea2784" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="d5c254e8-0eda-4ef8-8291-5c30436093fe" class="gradient-overlay accent-gradient"></div>
+                <h3 id="be9713d2-35f8-4670-8658-307a812140cf" class="text-2xl font-bold mb-4 relative z-10">迭代器特征</h3>
+                <span id="ac1fe349-fe8d-4602-9ed0-54733c90bcda" class="en-accent mb-4">ITERATOR TRAITS</span>
+                <p id="a9511652-c1b7-427c-9934-9fb85bb27a55" class="mb-4 relative z-10">
+                    <code>iterator_traits</code>是一个模板类，用于提取迭代器的特性信息，使得算法能够根据迭代器类型来调整行为。
+                </p>
+                
+                <pre class="language-cpp relative z-10"><code>// 迭代器特征模板
+template &lt;class Iterator&gt;
+struct iterator_traits {
+    // 迭代器关联的值类型
+    typedef typename Iterator::value_type value_type;
+    // 表示迭代器之间距离的类型
+    typedef typename Iterator::difference_type difference_type;
+    // 指向值类型的指针
+    typedef typename Iterator::pointer pointer;
+    // 值类型的引用
+    typedef typename Iterator::reference reference;
+    // 迭代器类别
+    typedef typename Iterator::iterator_category iterator_category;
+};</code></pre>
+
+                <div id="ef8de36b-b5e1-42f4-a410-31f08c844614" class="thin-line"></div>
+                
+                <h4 id="ef3a3dd0-70dd-4d5c-94a7-f916ca65bbff" class="font-semibold mt-4 mb-2">迭代器失效问题</h4>
+                <p id="a42874b3-5855-4c16-8363-3baf82bd36d7" class="mb-3 relative z-10">
+                    一个重要的实现细节是迭代器失效问题，即在容器修改后原先的迭代器可能不再有效：
+                </p>
+                <ul id="c540021b-824d-4c27-b720-61ea1e70f207" class="space-y-2 relative z-10">
+                    <li id="a9e3c162-2bfd-4d72-9f4f-abd7a1e04775">
+                        <strong>vector迭代器失效</strong>：重新分配内存时，所有迭代器失效；插入或删除时，插入/删除点之后的迭代器失效
+                    </li>
+                    <li id="c1410a4c-704d-4105-b130-85cb512bb5d5">
+                        <strong>list迭代器失效</strong>：仅被删除元素的迭代器失效
+                    </li>
+                    <li id="b2d13ee6-cb52-4f20-960d-65934d6729dc">
+                        <strong>map/set迭代器失效</strong>：删除时，仅被删除元素的迭代器失效；插入通常不会使迭代器失效
+                    </li>
+                </ul>
+                
+                <div id="a4e10809-cadf-40a4-a7e5-285f56846559" class="mt-6">
+                    <img src="https://images.unsplash.com/photo-1633412802994-5c058f151b66?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80" alt="Iterator concept visualization" class="rounded-lg shadow-lg w-full h-40 object-cover opacity-70">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="algorithms" class="py-20 bg-gray-900 relative">
+        <div id="aad8d64f-7f81-413a-949f-722fabf13cea" class="bento-grid">
+            <div id="f7181289-fe2a-4475-991a-cdbb31fdb1e1" class="bento-card col-span-12 animate-on-scroll">
+                <div id="b312c1db-ccb4-4016-b118-0a8aef6cd4d9" class="gradient-overlay primary-gradient"></div>
+                <div id="b3df2166-9742-4668-b0eb-a1941bfe4d5a" class="giant-number">04</div>
+                <h2 id="e91adc52-3ce6-4be4-9a28-f3a9b9e4cc5f" class="text-4xl font-bold mb-6 relative z-10">算法实现原理</h2>
+                <p id="c208a0a9-8467-4def-9edc-947ce3879d05" class="text-lg relative z-10">
+                    STL算法通过迭代器操作容器元素，与容器类型无关。算法的设计追求最佳性能和最大灵活性，通过模板和函数对象实现泛型化和自定义行为。
+                </p>
+            </div>
+
+            <div id="a457a028-c5ef-4bac-8f3e-ec77bd064ecd" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="e5f28ead-7cb9-4e0e-8af3-2fb0df4b67bd" class="gradient-overlay secondary-gradient"></div>
+                <h3 id="d1ce67d7-c1fd-4b6a-90c3-246116735056" class="text-2xl font-bold mb-4 relative z-10">算法类别</h3>
+                <span id="af7a82e2-9dbf-4e83-a110-d095144d813f" class="en-accent mb-4">ALGORITHM CATEGORIES</span>
+                
+                <div id="c7db2ab9-be4a-486c-9775-f2cbd98156c0" class="grid grid-cols-2 gap-4 relative z-10">
+                    <div id="c411754d-6a1c-42a4-a4a7-2af89246e194">
+                        <h4 id="a58ae376-69ef-44eb-a44f-08c7ff60e089" class="text-xl font-semibold mb-2 text-primary">非修改序列算法</h4>
+                        <ul id="acd04fda-d3ff-44ba-9c81-2d6992773312" class="space-y-1 text-sm">
+                            <li id="c3c5eee5-df4f-43a6-abfb-a46f35f65225">find, find_if</li>
+                            <li id="ba31109d-dbf5-4894-9a72-7590e84112e2">count, count_if</li>
+                            <li id="afd09474-cee3-4019-bccc-c7c2e9415222">for_each</li>
+                            <li id="f08a76e3-54dc-4208-925e-aba80818ea90">equal, mismatch</li>
+                        </ul>
+                    </div>
+                    <div id="d1de7d05-11d1-4696-9048-eaf67cf2d889">
+                        <h4 id="ba04fb17-afde-488f-b246-15605dcc126f" class="text-xl font-semibold mb-2 text-secondary">修改序列算法</h4>
+                        <ul id="bfd01a5b-f85e-4fad-8bb2-0ddf6e70bce8" class="space-y-1 text-sm">
+                            <li id="c757d01e-05c1-445c-9c69-d595269c8bc0">copy, move</li>
+                            <li id="c08666ba-c09c-4048-9c42-c0f312285176">transform</li>
+                            <li id="e95e623b-ccb6-4487-a10b-cdbb7e1e34b5">replace, replace_if</li>
+                            <li id="f1fe92ea-50c6-40ae-84e7-f64c098cdb43">fill, generate</li>
+                        </ul>
+                    </div>
+                    <div id="e5c09570-bc64-4f90-9a61-0325e868e266">
+                        <h4 id="c21fb42a-bdcd-4e1c-a163-4991abcc0282" class="text-xl font-semibold mb-2 text-accent">排序算法</h4>
+                        <ul id="ff1596e5-8737-4055-82bb-a5002d4700c2" class="space-y-1 text-sm">
+                            <li id="af14cacd-d1bb-4d8c-88fe-77981b7f2abd">sort, stable_sort</li>
+                            <li id="aed7b880-768f-41e2-9920-7851ccb2bcb6">partial_sort</li>
+                            <li id="e5eecce5-e736-4efc-aed0-f9f4aae2bd11">nth_element</li>
+                            <li id="cf752095-b5ea-444c-945e-906979c7ab8e">is_sorted</li>
+                        </ul>
+                    </div>
+                    <div id="c7b7acbd-0e57-42ef-a3c4-afbc770de331">
+                        <h4 id="b202606e-8c13-4093-bcd1-997e5de50cb8" class="text-xl font-semibold mb-2 text-primary">二分查找算法</h4>
+                        <ul id="b43320e0-184c-412c-8349-95fccb5d6c75" class="space-y-1 text-sm">
+                            <li id="ba374577-d87c-4974-b7da-2c58d00015f3">binary_search</li>
+                            <li id="f4051f9e-9675-4a4c-9a7b-378f79514acb">lower_bound</li>
+                            <li id="d2553e18-fb5c-49bb-9480-145af79e4759">upper_bound</li>
+                            <li id="e7b94730-264e-4765-b078-48c74d7faf21">equal_range</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div id="c20559ca-43ec-40c7-ace4-8767f461dbcd" class="thin-line"></div>
+                
+                <h4 id="da9f9551-3ff7-41c5-9aaf-8dffcd028005" class="font-semibold mt-4 mb-2">算法设计原则</h4>
+                <ul id="aa22e3a3-3009-47e9-998a-5f2a68dd5a61" class="space-y-2 relative z-10">
+                    <li id="f9d83cc3-f9a7-4ba7-9e2e-cdcc34280b75"><strong>泛型设计</strong>：通过模板参数接受任何满足要求的迭代器</li>
+                    <li id="afc49e72-0be5-4586-a056-7031aa2f53d5"><strong>效率优先</strong>：算法实现追求最佳时间和空间复杂度</li>
+                    <li id="c3835a2f-ec55-4214-96f4-7853b0a78557"><strong>标签分派技术</strong>：根据迭代器类别选择最优算法实现</li>
+                </ul>
+            </div>
+
+            <div id="badae728-a734-4fa0-9fa0-322c9a9e1525" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="e4f55034-fcd2-42c5-adca-dcc52a689da0" class="gradient-overlay accent-gradient"></div>
+                <h3 id="c1e709b1-5994-4a27-b42b-f61be31af14b" class="text-2xl font-bold mb-4 relative z-10">排序算法实现示例</h3>
+                <span id="a0f36880-b1b6-46be-9ffe-bc0863530f29" class="en-accent mb-4">SORTING ALGORITHM IMPLEMENTATION</span>
+                
+                <p id="a82d5775-92bf-4149-a7d5-8a5a40ace608" class="mb-4 relative z-10">
+                    <code>std::sort</code>的实现通常基于内省排序(Introsort)，它结合了快速排序、堆排序和插入排序的优点：
+                </p>
+                
+                <pre class="language-cpp relative z-10"><code>// sort算法的简化实现
+template&lt;typename RandomAccessIterator&gt;
+void sort(RandomAccessIterator first, RandomAccessIterator last) {
+    if (first != last) {
+        // 如果数据量足够大，使用内省排序
+        introsort(first, last, log2(last - first) * 2);
+        // 对小数组使用插入排序
+        insertion_sort(first, last);
+    }
+}
+
+template&lt;typename RandomAccessIterator&gt;
+void introsort(RandomAccessIterator first, RandomAccessIterator last, int depth_limit) {
+    while (last - first > threshold) {
+        if (depth_limit == 0) {
+            // 达到最大递归深度，切换到堆排序
+            partial_sort(first, last, last);
+            return;
+        }
+        depth_limit--;
+        // 使用三数取中法选择枢轴
+        auto pivot = median_of_three(first, first + (last-first)/2, last-1);
+        // 进行快速排序的分区操作
+        auto cut = partition(first, last, pivot);
+        // 递归排序右半部分
+        introsort(cut, last, depth_limit);
+        // 迭代排序左半部分
+        last = cut;
+    }
+}</code></pre>
+
+                <div id="bb7e8fa6-3683-4044-89ef-1064fcecab8d" class="mt-4 relative z-10">
+                    <div id="d011bc30-8c83-4f35-a968-1da0f121b592" class="chart-container" style="height: 250px;"></div>
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const chartDom = document.getElementById('d011bc30-8c83-4f35-a968-1da0f121b592');
+                            const myChart = echarts.init(chartDom);
+                            const option = {
+                                backgroundColor: 'transparent',
+                                title: {
+                                    text: '排序算法性能比较',
+                                    left: 'center',
+                                    textStyle: {
+                                        color: '#f8fafc'
+                                    }
+                                },
+                                tooltip: {
+                                    trigger: 'axis',
+                                    axisPointer: {
+                                        type: 'shadow'
+                                    }
+                                },
+                                legend: {
+                                    data: ['最差情况', '平均情况', '最佳情况'],
+                                    textStyle: {
+                                        color: '#f8fafc'
+                                    },
+                                    bottom: 0
+                                },
+                                grid: {
+                                    left: '3%',
+                                    right: '4%',
+                                    top: '15%',
+                                    bottom: '15%',
+                                    containLabel: true
+                                },
+                                xAxis: {
+                                    type: 'category',
+                                    data: ['快速排序', '堆排序', '归并排序', '插入排序'],
+                                    axisLine: {
+                                        lineStyle: {
+                                            color: '#64748b'
+                                        }
+                                    },
+                                    axisLabel: {
+                                        color: '#f8fafc'
+                                    }
+                                },
+                                yAxis: {
+                                    type: 'value',
+                                    name: '时间复杂度',
+                                    axisLine: {
+                                        lineStyle: {
+                                            color: '#64748b'
+                                        }
+                                    },
+                                    axisLabel: {
+                                        color: '#f8fafc',
+                                        formatter: 'O(n{val})'
+                                    }
+                                },
+                                series: [
+                                    {
+                                        name: '最差情况',
+                                        type: 'bar',
+                                        data: [2, 1, 1, 2],
+                                        itemStyle: {
+                                            color: '#f43f5e'
+                                        }
+                                    },
+                                    {
+                                        name: '平均情况',
+                                        type: 'bar',
+                                        data: [1.1, 1, 1, 1.5],
+                                        itemStyle: {
+                                            color: '#3b82f6'
+                                        }
+                                    },
+                                    {
+                                        name: '最佳情况',
+                                        type: 'bar',
+                                        data: [1.1, 1, 1, 1],
+                                        itemStyle: {
+                                            color: '#10b981'
+                                        }
+                                    }
+                                ]
+                            };
+                            myChart.setOption(option);
+                            window.addEventListener('resize', function() {
+                                myChart.resize();
+                            });
+                        });
+                    </script>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="allocators" class="py-20 relative">
+        <div id="b3111a43-c2d3-4d54-9d4a-92b91c7baa90" class="bento-grid">
+            <div id="e6b28c94-348e-426c-a526-c2b5d3a298bb" class="bento-card col-span-12 animate-on-scroll">
+                <div id="a1c5ce74-4399-42fc-bb8e-752fdea4a075" class="gradient-overlay secondary-gradient"></div>
+                <div id="e103f9d2-bba5-4f3e-abbb-c736b2259c1d" class="giant-number">05</div>
+                <h2 id="b5fe5fcf-1fd3-43f8-8df4-d408682bdbd5" class="text-4xl font-bold mb-6 relative z-10">分配器实现原理</h2>
+                <p id="c5fb62e1-ca0a-45c5-af4e-da04a27743ad" class="text-lg relative z-10">
+                    STL分配器负责内存的分配和释放，为容器提供底层的内存管理支持。不同的STL实现可能使用不同的分配器策略，以优化内存分配效率。
+                </p>
+            </div>
+
+            <div id="f92d35ca-a870-4ee4-8b2d-fba453dcd851" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="a5b4dcda-d3e7-45c7-a4b3-8e0e6df13a68" class="gradient-overlay primary-gradient"></div>
+                <h3 id="f36ed9ef-8cc6-43c5-881e-319bb148ef1a" class="text-2xl font-bold mb-4 relative z-10">标准分配器</h3>
+                <span id="ffa97bc8-6a7e-4acf-baf3-32eb9d4e2c0d" class="en-accent mb-4">STD::ALLOCATOR</span>
+                
+                <p id="a38c95fc-3eb9-417a-b0c4-6a4c32130626" class="mb-4 relative z-10">
+                    <code>std::allocator</code>是STL的默认分配器，通常是对<code>::operator new</code>和<code>::operator delete</code>的简单封装。
+                </p>
+
+                <pre class="language-cpp relative z-10"><code>// 极简化的allocator实现示意
+template &lt;class T&gt;
+class allocator {
+public:
+    T* allocate(size_t n) {
+        return static_cast&lt;T*&gt;(::operator new(n * sizeof(T)));
+    }
+    
+    void deallocate(T* p, size_t n) {
+        ::operator delete(p);
+    }
+    
+    template&lt;class U, class... Args&gt;
+    void construct(U* p, Args&&... args) {
+        ::new((void*)p) U(std::forward&lt;Args&gt;(args)...);
+    }
+    
+    template&lt;class U&gt;
+    void destroy(U* p) {
+        p->~U();
+    }
+};</code></pre>
+
+                <div id="e47029a5-52fa-4777-add7-1b3b3e3c2708" class="mt-4 relative z-10">
+                    <img src="https://images.unsplash.com/photo-1515462277126-2dd0c162007a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80" alt="Memory management concept" class="rounded-lg shadow-lg w-full h-48 object-cover opacity-70">
+                </div>
+            </div>
+
+            <div id="c9b7ea90-e274-4293-8eef-32732ebfb855" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="b588be40-eea7-4c8d-ba38-6a24a5d0714b" class="gradient-overlay accent-gradient"></div>
+                <h3 id="ba7d6c2a-9047-4284-b551-5d436c38fec4" class="text-2xl font-bold mb-4 relative z-10">SGI STL的分配器</h3>
+                <span id="e2741248-cc68-4d39-97ca-e1364350cc01" class="en-accent mb-4">MEMORY POOL TECHNIQUE</span>
+                
+                <p id="db39fe5c-8bac-4c1c-ab96-bdd2990fd9b2" class="mb-4 relative z-10">
+                    SGI STL实现中的分配器更为复杂，采用了内存池技术来减少内存碎片和提高小块内存分配的效率。
+                </p>
+                
+                <div id="c91bd3b2-3eef-47fb-b535-6492aba60ccc" class="thin-line"></div>
+                
+                <h4 id="a63135d5-2db6-4e50-98b2-d9f407f2dd11" class="font-semibold mt-4 mb-2">核心实现细节：</h4>
+                <ul id="c2bf94cd-fe27-4b6a-995c-84a2f2738999" class="space-y-3 relative z-10">
+                    <li id="acee7d18-784d-44f2-a22e-d609d455b77f">
+                        <strong>二级分配策略</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="ac993ed4-9157-4731-9854-514e4cd8684c">一级分配器：直接使用<code>malloc</code>和<code>free</code>，处理大块内存</li>
+                            <li id="d1ee092a-5743-47fb-adbb-32fb50874f57">二级分配器：使用内存池，处理小块内存(<=128字节)</li>
+                        </ul>
+                    </li>
+                    <li id="ce1a0f6b-ab29-4f25-8148-0e1c8965a517">
+                        <strong>内存池设计</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="efbdb2c1-88f4-46ca-842a-b0034998bead">维护16个自由链表，每个链表管理固定大小的内存块</li>
+                            <li id="c9c30d3a-f1d9-4a4b-a7b1-d1c1c4c2f7d3">内存块大小从8字节到128字节，以8字节递增</li>
+                        </ul>
+                    </li>
+                    <li id="c051b8e8-9856-4742-a1c8-c2c029119499">
+                        <strong>内存块申请</strong>：
+                        <ul class="ml-5 space-y-1 mt-1">
+                            <li id="ac4479c3-726b-4f94-bdb8-1c1f81c66933">如果自由链表为空，一次性申请多个相同大小的内存块</li>
+                            <li id="ee42624f-6825-49b3-8a8c-69aacf04c0ee">将多余的内存块加入自由链表，返回第一个内存块</li>
+                        </ul>
+                    </li>
+                    <li id="c262b1be-49b4-4a97-a238-4c9d75c89e42">
+                        <strong>内存回收</strong>：将释放的内存块放回对应的自由链表，不归还给操作系统</li>
+                </ul>
+
+                <div id="bfcfa210-8336-4945-a8b9-f694b28c242e" class="mt-4 relative z-10">
+                    <div id="aa6993cd-27ef-44be-a4dd-18ac25eb4589" class="chart-container" style="height: 200px;"></div>
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const chartDom = document.getElementById('aa6993cd-27ef-44be-a4dd-18ac25eb4589');
+                            const myChart = echarts.init(chartDom);
+                            const option = {
+                                backgroundColor: 'transparent',
+                                tooltip: {
+                                    trigger: 'axis',
+                                    axisPointer: {
+                                        type: 'shadow'
+                                    }
+                                },
+                                grid: {
+                                    left: '3%',
+                                    right: '4%',
+                                    top: '10%',
+                                    bottom: '10%',
+                                    containLabel: true
+                                },
+                                xAxis: {
+                                    type: 'category',
+                                    data: ['8字节', '16字节', '24字节', '32字节', '64字节', '128字节'],
+                                    axisLine: {
+                                        lineStyle: {
+                                            color: '#64748b'
+                                        }
+                                    },
+                                    axisLabel: {
+                                        color: '#f8fafc'
+                                    }
+                                },
+                                yAxis: {
+                                    type: 'value',
+                                    name: '分配耗时(相对)',
+                                    axisLine: {
+                                        lineStyle: {
+                                            color: '#64748b'
+                                        }
+                                    },
+                                    axisLabel: {
+                                        color: '#f8fafc'
+                                    }
+                                },
+                                series: [
+                                    {
+                                        name: '标准分配器',
+                                        type: 'line',
+                                        data: [100, 105, 110, 115, 125, 140],
+                                        itemStyle: {
+                                            color: '#3b82f6'
+                                        }
+                                    },
+                                    {
+                                        name: '内存池分配器',
+                                        type: 'line',
+                                        data: [40, 42, 45, 50, 60, 70],
+                                        itemStyle: {
+                                            color: '#10b981'
+                                        }
+                                    }
+                                ]
+                            };
+                            myChart.setOption(option);
+                            window.addEventListener('resize', function() {
+                                myChart.resize();
+                            });
+                        });
+                    </script>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="design" class="py-20 bg-gray-900 relative">
+        <div id="e1c80d7c-a409-43f3-b434-45f6d6e29e51" class="bento-grid">
+            <div id="e3e0ec39-a49b-482f-9d7e-cd34884834c9" class="bento-card col-span-12 animate-on-scroll">
+                <div id="d708544e-f24f-43bf-8847-1b692b4a56c9" class="gradient-overlay primary-gradient"></div>
+                <div id="e674cdeb-bdd6-41bd-b56b-6ed833c052c4" class="giant-number">06</div>
+                <h2 id="a78bb0cc-af13-4a2f-8905-8f0effddbc50" class="text-4xl font-bold mb-6 relative z-10">STL设计思想与最佳实践</h2>
+                <p id="edc21c2e-0b38-42d7-8e52-5e4111490adb" class="text-lg relative z-10">
+                    STL的设计体现了C++语言的强大特性，特别是模板和泛型编程。通过深入理解STL的设计思想，我们可以更好地使用这些工具，编写出高效、可靠的C++代码。
+                </p>
+            </div>
+
+            <div id="adc35a99-bbdd-43ec-86ec-e98d7e6c903c" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="a37ad646-0aea-45df-9b97-9a8ec857ecbc" class="gradient-overlay secondary-gradient"></div>
+                <h3 id="c4fc83de-039c-4e1e-ac30-f7641955c6fd" class="text-2xl font-bold mb-4 relative z-10">STL的设计思想</h3>
+                <span id="c6d1174e-76c5-4db0-8070-9ab63e6485ba" class="en-accent mb-4">DESIGN PHILOSOPHY</span>
+                
+                <div id="e2476079-219f-4ccb-9973-c2fc6a54414f" class="giant-text mb-4">泛型编程</div>
+                
+                <ul id="ef37c499-3193-4dd4-8bd5-f03b46655cf2" class="space-y-4 relative z-10">
+                    <li id="ed4a2ea1-e397-4f2a-8ec6-2ac1466ff8a5">
+                        <h4 id="b296692e-7bf7-4fc8-86a4-d872f8e8f60c" class="text-lg font-semibold text-secondary">泛型编程</h4>
+                        <p id="f19bbd6b-96a3-4b94-bf6a-be243fa9b4f1" class="text-gray-300">通过模板实现类型无关的代码，在编译时而非运行时实现多态，提高效率。</p>
+                    </li>
+                    <li id="c0b1378c-c9db-48a0-b580-a032eec01453">
+                        <h4 id="cca40423-ed0a-44b3-8c6c-0bbd56d32852" class="text-lg font-semibold text-secondary">分离数据结构和算法</h4>
+                        <p id="f8e81801-0865-4455-9dcc-c37af0fdae33" class="text-gray-300">数据结构(容器)专注于数据管理，算法专注于数据处理，迭代器作为两者的桥梁。</p>
+                    </li>
+                    <li id="d2dbcd9c-20eb-4912-8c8d-cc82931cf41d">
+                        <h4 id="aea6b738-3d8a-4aae-9987-7b82880f7559" class="text-lg font-semibold text-secondary">效率与抽象的平衡</h4>
+                        <p id="c8d36a5e-964d-4aaa-8465-191fa19b63e4" class="text-gray-300">提供高层抽象的同时不牺牲效率，遵循零抽象惩罚原则(zero-overhead principle)。</p>
+                    </li>
+                </ul>
+
+                <div id="c37a3013-221c-4812-9d7b-fb9692c21864" class="mt-6 relative z-10">
+                    <img src="https://images.unsplash.com/photo-1549082984-1323b94df9a6?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80" alt="Generic programming concept" class="rounded-lg shadow-lg w-full h-48 object-cover opacity-70">
+                </div>
+            </div>
+
+            <div id="f871c38b-b8bc-44fd-a8f6-25ef9df0e68f" class="bento-card col-span-12 md:col-span-6 animate-on-scroll">
+                <div id="c00b0be7-1891-4ab4-97b6-ba83e8bd5724" class="gradient-overlay accent-gradient"></div>
+                <h3 id="eb9c3841-1ff4-4bc4-b04a-a399c0430db5" class="text-2xl font-bold mb-4 relative z-10">STL实现中的优化技术</h3>
+                <span id="a27fa9ff-553f-4c89-b2c2-2921e6c4b6b1" class="en-accent mb-4">OPTIMIZATION TECHNIQUES</span>
+                
+                <div id="f148d36b-1294-4697-8794-4692bcc16a57" class="space-y-4 relative z-10">
+                    <div id="af14c337-a231-4a76-99e7-e4a410022177" class="flex items-start">
+                        <div id="a2c8d2b4-0cb4-4f09-88d2-03c867247237" class="text-4xl font-bold text-primary mr-4">01</div>
+                        <div id="f06f0fba-7c56-4afa-a031-32acb1a1cff7">
+                            <h4 id="f19c90ee-4c80-4545-9361-d08e1331ef9a" class="text-lg font-semibold">静态多态</h4>
+                            <p id="e0594fe1-6b8b-4a67-9d6e-4ef26ef47fd3" class="text-gray-300">通过模板和内联函数实现，避免虚函数调用开销，在编译时确定函数调用。</p>
+                        </div>
+                    </div>
+                    <div id="a7f84fe1-8cbe-4e5f-9994-1ab0b6ae28a2" class="flex items-start">
+                        <div id="ad3b1246-7f82-4f9f-b783-be46d4bce853" class="text-4xl font-bold text-primary mr-4">02</div>
+                        <div id="e5923afe-b77c-4489-a695-f8b934cf29c6">
+                            <h4 id="f4dec0cd-c6cf-4324-bf3b-dd9be9ee3294" class="text-lg font-semibold">特化与偏特化</h4>
+                            <p id="b4412767-db7e-4ae0-a1c1-e3597ca25845" class="text-gray-300">为特定类型提供优化实现，如<code>vector&lt;bool&gt;</code>的特化版本通过位压缩节省空间。</p>
+                        </div>
+                    </div>
+                    <div id="efd418ee-3ba2-42cb-b55e-fc8ef8cd2e91" class="flex items-start">
+                        <div id="a9a2e89d-2e72-4313-ae70-b9e12fa88e20" class="text-4xl font-bold text-primary mr-4">03</div>
+                        <div id="c389fd6e-0a7b-44b8-82b8-9e5f121c6d96">
+                            <h4 id="c45c856a-c32e-482a-9280-e62413998d1f" class="text-lg font-semibold">表达式模板</h4>
+                            <p id="b18f4af2-7a29-4261-a3c0-98f0781d0e0b" class="text-gray-300">在编译时优化复杂表达式，避免创建不必要的临时对象，提高计算密集型操作的效率。</p>
+                        </div>
+                    </div>
+                    <div id="edb72431-6e60-4cc1-9359-0c8fbd7164b0" class="flex items-start">
+                        <div id="c3afea54-5f0f-45d1-9b6a-78792b0bc8db" class="text-4xl font-bold text-primary mr-4">04</div>
+                        <div id="c678b9c9-5678-4331-8608-3eb17f6770fa">
+                            <h4 id="df3c3173-1fcd-4870-9a27-88aeef7f8da3" class="text-lg font-semibold">移动语义(C++11)</h4>
+                            <p id="b9a424be-18e9-442c-8c12-e6e6cdbb1e1f" class="text-gray-300">通过右值引用和移动构造/赋值减少复制开销，特别适用于资源管理类，如容器。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="summary" class="py-20 relative">
+        <div id="aa06635e-0b8b-48c4-b8ad-a9e52e40e6ab" class="bento-grid">
+            <div id="bc5be8b9-cdd2-41df-8283-94b774b8893c" class="bento-card col-span-12 animate-on-scroll">
+                <div id="f7202266-bc13-4159-9c57-f9f8e9864384" class="gradient-overlay primary-gradient"></div>
+                <h2 id="c3c07af8-c8b3-4b16-9d82-51b1e9e9db9a" class="text-4xl font-bold mb-6 relative z-10">总结</h2>
+                <p id="e6aef27c-e83c-49a0-8b53-d2cd64793ba1" class="text-lg mb-6 relative z-10">
+                    STL是C++标准库中非常重要的组成部分，它的实现体现了C++语言的强大特性，特别是模板和泛型编程。通过深入理解STL的实现原理，我们可以更好地使用这些工具，编写出高效、可靠的C++代码。
+                </p>
+                
+                <div id="e2cab823-d577-4bc8-a89c-ddcb14649f60" class="text-lg relative z-10">
+                    <p id="d8a1871b-c90e-4f14-91ec-20e58ae82cb4" class="mb-4">STL的关键实现特点包括：</p>
+                    <ul id="a55d05b9-e19d-421a-be61-04fea9769ab0" class="space-y-2 pl-6 list-disc">
+                        <li id="d3edfe19-ba06-45b3-99e7-0f1e824b9677">基于模板的泛型设计，实现了算法与数据结构的分离</li>
+                        <li id="eb7ecf2f-05d0-4a8e-9c35-4d1becb8bc05">通过迭代器连接算法和容器，提供统一的接口</li>
+                        <li id="fad4a3ba-74a3-42b4-a734-964cd4723af9">各种容器采用不同的数据结构实现，适用于不同的使用场景</li>
+                        <li id="e0f9cea7-60e9-4f33-801e-a8146358c1fd">算法通过迭代器操作容器元素，与具体容器类型无关</li>
+                        <li id="f70f056f-f728-480f-b60e-75d7bcd635f7">分配器提供内存管理，特别是SGI STL实现中的内存池技术提高了小内存块分配效率</li>
+                    </ul>
+                </div>
+                
+                <p id="f1004fd8-2bfc-4166-a9fa-b08ba5145950" class="text-lg mt-6 relative z-10">
+                    理解这些实现原理，不仅有助于更高效地使用STL，还能够在编写自己的库和程序时借鉴这些设计思想和技术。
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <footer id="ec329c96-b8bd-46bf-ba2a-cfcd3d9c238e" class="bg-gray-900 text-center py-8 px-4">
+        <p id="ac69e4c8-e894-4844-85e4-9cb22a32e3a2" class="text-gray-400">&copy; 2025 C++ STL深度解析 | 使用HTML5, TailwindCSS和Framer Motion构建</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 监听滚动事件，触发动画
+            const animateElements = document.querySelectorAll('.animate-on-scroll');
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, {
+                threshold: 0.1
+            });
+            
+            animateElements.forEach(el => {
+                observer.observe(el);
+            });
+            
+            // 平滑滚动
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+            
+            // 代码高亮
+            if (typeof Prism !== 'undefined') {
+                Prism.highlightAll();
+            }
+        });
+    </script>
+</body>
+</html>
