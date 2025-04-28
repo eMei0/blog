@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++模板元编程详解</title>
+    
+    <!-- TailwindCSS -->
+    <script src="https://fastly.jsdelivr.net/npm/tailwindcss@3.3.3/dist/tailwind.min.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    
+    <!-- Framer Motion -->
+    <script src="https://fastly.jsdelivr.net/npm/framer-motion@10.12.16/dist/framer-motion.min.js"></script>
+    
+    <!-- Prism.js for syntax highlighting -->
+    <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/components/prism-cpp.min.js"></script>
+    
+    <!-- ECharts -->
+    <script src="https://fastly.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Sans+SC:wght@100..900&display=swap');
+        
+        :root {
+            --color-primary: #0066FF;
+            --color-secondary: #00CCFF;
+            --color-accent: #FF3366;
+            --color-dark: #0A0F16;
+            --color-light: #F5F7FA;
+        }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background-color: var(--color-dark);
+            color: var(--color-light);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .accent-gradient-text {
+            background: linear-gradient(90deg, var(--color-accent), #FFCC66);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .bento-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+        
+        .bento-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .bento-card:hover {
+            border-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .code-block {
+            border-radius: 0.75rem;
+            margin: 1.5rem 0;
+            overflow: hidden;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .highlight-line {
+            position: relative;
+        }
+        
+        .highlight-line::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 3px;
+            height: 100%;
+            background: var(--color-primary);
+        }
+        
+        .scroll-indicator {
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-10px);
+            }
+            60% {
+                transform: translateY(-5px);
+            }
+        }
+        
+        .section-reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease-out;
+        }
+        
+        .section-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Fix for Prism.js to correctly display angle brackets */
+        .token.operator {
+            background: none !important;
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen">
+    <!-- Hero Section -->
+    <header id="c3d9f2e1-cb3d-4149-86c5-07fde8e5579b" class="min-h-screen flex flex-col justify-center relative overflow-hidden">
+        <div id="de740a6a-5905-4bab-bf18-531556e56e42" class="container mx-auto px-4 py-20 z-10">
+            <div id="f14fb935-3e5e-4bb7-9821-1a9af43089cb" class="text-center mb-8">
+                <h1 id="e9f085f0-68e1-4c0b-aa79-153cffb50f09" class="text-7xl md:text-9xl font-bold mb-4">
+                    <span class="gradient-text">模板元编程</span>
+                </h1>
+                <p id="cb56d9f4-55a4-4492-b90a-a0abcf2a6d76" class="text-xl md:text-3xl text-gray-300 mt-6">
+                    Template <span class="accent-gradient-text">Meta</span>programming
+                </p>
+            </div>
+            
+            <div id="a65e8ec4-5a1e-4c44-8489-8dac49ef2bac" class="mt-20 flex justify-center">
+                <div id="ff2d0696-5532-42fd-9b29-4da1a2491839" class="scroll-indicator">
+                    <i class="fas fa-chevron-down text-3xl text-gray-400 opacity-70"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div id="a68e9a76-d141-4ede-91da-ff57112a0777" class="absolute inset-0 bg-gradient-to-b from-transparent to-[#0A0F16] z-0"></div>
+        
+        <!-- Background animated circles -->
+        <div id="e7c55181-2732-4436-aebe-4068a69a6db1" class="absolute inset-0 overflow-hidden z-0">
+            <div id="d46bf99c-1154-42c7-8c43-140994a4a699" class="absolute w-[500px] h-[500px] rounded-full bg-[#0066FF] opacity-5 blur-[100px] -top-[100px] -left-[100px]"></div>
+            <div id="b51e9903-fd19-4440-bc94-5cf0db29e175" class="absolute w-[400px] h-[400px] rounded-full bg-[#00CCFF] opacity-5 blur-[100px] top-[40%] right-[10%]"></div>
+            <div id="d7f854fe-dc34-417a-9f4a-b2b54fbe5d2b" class="absolute w-[300px] h-[300px] rounded-full bg-[#FF3366] opacity-5 blur-[100px] bottom-[10%] left-[20%]"></div>
+        </div>
+    </header>
+    
+    <main id="c8e051dd-d621-41c8-9a1b-41be7e660c84" class="container mx-auto px-4 py-20">
+        <!-- Introduction -->
+        <section id="eab81fcc-1623-4f9d-a4a8-c283430cc3e7" class="mb-32 section-reveal">
+            <div id="e86f908e-6477-4b6e-af80-22282562e7b3" class="max-w-3xl mx-auto">
+                <h2 id="a67345d9-3589-4311-af9a-8562b1352150" class="text-4xl font-bold mb-8 gradient-text">什么是模板元编程？</h2>
+                <p id="e762c9f2-c3ba-467d-b6af-1075ac801bc2" class="text-xl text-gray-300 leading-relaxed mb-6">
+                    模板元编程（Template Metaprogramming，TMP）是一种编程范式，它利用C++模板系统在<span class="accent-gradient-text font-semibold">编译期</span>执行计算和类型操作。
+                </p>
+                <p id="aaa824f2-c27e-43a5-a2df-c16b0237da56" class="text-xl text-gray-300 leading-relaxed mb-8">
+                    模板元编程的本质是通过模板实例化和特化来实现计算，使得某些运算在代码编译时就能完成，而不是在运行时执行。
+                </p>
+                
+                <div id="fa756786-bcb4-4ad2-87f2-26c9a2bf8ef9" class="mt-12 p-6 bg-opacity-20 bg-white rounded-xl border border-gray-700">
+                    <h3 id="c4732ab2-c756-4e0c-a056-ca59b7e17d95" class="text-2xl font-bold mb-4">模板元编程与泛型编程的区别</h3>
+                    <div id="ba54372c-3420-49e4-9c5b-64047c2e03eb" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div id="b6f9fab3-5ae2-43ee-a072-480e34613179">
+                            <h4 id="dd9047c4-b04c-4402-8118-0d3129f46c9c" class="font-bold text-lg text-white mb-2">泛型编程</h4>
+                            <ul id="a5670730-e853-4637-9828-fc449c3cb561" class="text-gray-300 list-disc pl-5 space-y-2">
+                                <li>关注于编写可重用的类型无关代码</li>
+                                <li>主要在运行时执行</li>
+                                <li>以标准库容器和算法为典型</li>
+                            </ul>
+                        </div>
+                        <div id="ca1d0409-2e93-4594-855b-3c8ffb1fa9b7">
+                            <h4 id="f4187d96-d755-49ed-b4f1-87aa1c64b7b0" class="font-bold text-lg text-white mb-2">模板元编程</h4>
+                            <ul id="b97947a5-4c9e-4344-b56f-a4a5f7630b55" class="text-gray-300 list-disc pl-5 space-y-2">
+                                <li>关注于编译期计算和类型操作</li>
+                                <li>在编译期执行</li>
+                                <li>以类型萃取、策略选择为典型</li>
+                                <li>具有图灵完备性</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Core Components -->
+        <section id="a26087d1-8ee1-421b-912d-ab11a09e7608" class="mb-32 section-reveal">
+            <h2 id="ba0c276e-313e-447d-a7a2-27e2d71e75e0" class="text-6xl md:text-7xl font-bold text-center mb-20">
+                <span class="gradient-text">核心组成部分</span>
+            </h2>
+            
+            <div id="adb5227a-a4b1-4861-84ce-9f75896b9d3b" class="bento-grid grid-cols-1 md:grid-cols-2 mb-16">
+                <div id="ac450463-cbe0-486c-a000-fa215a6a8f3a" class="bento-card">
+                    <div id="e68f110b-5732-4eea-8a21-df8cc24aedec" class="flex items-center mb-4">
+                        <div id="e020be8e-87ad-4a00-b37b-05d6cbda1897" class="w-12 h-12 rounded-full bg-gradient-to-r from-[#0066FF] to-[#0066FF] flex items-center justify-center">
+                            <i class="fas fa-database text-white text-xl"></i>
+                        </div>
+                        <h3 id="b2fcdc6e-b99a-47b8-870e-0564eb43d6c5" class="text-3xl font-bold ml-4">元数据</h3>
+                        <span id="ca57f26a-1e01-4039-b619-be22ea2138c8" class="ml-2 text-gray-400">Meta-Data</span>
+                    </div>
+                    <p id="b8a412e1-044d-4d7c-a3ac-ba623edf5942" class="text-gray-300 mb-4">元数据是编译期可以使用的数据，包括：</p>
+                    <ul id="d68c23c0-8e19-4984-8c30-f4d2fe119af5" class="text-gray-300 list-disc pl-5 space-y-2">
+                        <li><code>enum</code> 枚举常量</li>
+                        <li><code>static const</code> 静态常量</li>
+                        <li>类型 <code>Type</code> 本身</li>
+                    </ul>
+                </div>
+                
+                <div id="c201660b-ca4e-432a-a78f-396f372136b3" class="bento-card">
+                    <div id="d5548e17-ef09-47ff-9911-eaf17b6240da" class="flex items-center mb-4">
+                        <div id="ce43ffd7-1e6a-4a25-94ce-598f971bf53e" class="w-12 h-12 rounded-full bg-gradient-to-r from-[#FF3366] to-[#FF3366] flex items-center justify-center">
+                            <i class="fas fa-code text-white text-xl"></i>
+                        </div>
+                        <h3 id="fc783dda-d12d-4bea-bede-6938e875183a" class="text-3xl font-bold ml-4">元函数</h3>
+                        <span id="be58a408-b31b-4a09-9a30-1b5bd95c36f4" class="ml-2 text-gray-400">Meta-Function</span>
+                    </div>
+                    <p id="eca3c293-e7b5-45e1-ba59-f14fc2792586" class="text-gray-300 mb-4">元函数是进行编译期计算的机制，包括：</p>
+                    <ul id="e88e4453-551b-44fa-9ffd-774cc91ef2b3" class="text-gray-300 list-disc pl-5 space-y-2">
+                        <li>模板类</li>
+                        <li>模板特化</li>
+                        <li>模板偏特化</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div id="b63cca5b-5337-4692-8ae3-92aedf1f5ff2" class="max-w-4xl mx-auto">
+                <div id="b7cffe24-a486-4bfd-957e-00c1e2e0ad7c" class="code-block">
+                    <pre><code class="language-cpp">// 元函数示例
+template &lt;int N, int M&gt;
+struct meta_func
+{
+    static const int value = N + M;  // 计算结果存储在value中
+};
+
+// 在编译期计算1+2的结果
+std::cout &lt;&lt; meta_func&lt;1, 2&gt;::value &lt;&lt; std::endl;  // 输出3</code></pre>
+                </div>
+                <p id="d453d123-ce7b-4b85-ad1e-d2d7b60f1709" class="text-gray-400 text-sm text-center">
+                    在上面的例子中，<code>meta_func</code>是一个元函数，它在编译期计算两个整数的和。
+                </p>
+            </div>
+        </section>
+        
+        <!-- Syntax Elements -->
+        <section id="e24a6120-5a5c-4950-9474-1c09584ab695" class="mb-32 section-reveal">
+            <h2 id="f04dc67e-6a1b-4a87-9573-5a5ad71f43c7" class="text-6xl md:text-7xl font-bold text-center mb-20">
+                <span class="gradient-text">语法元素</span>
+            </h2>
+            
+            <div id="c1a49b00-f95b-49d8-9a07-efad9d310757" class="bento-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 mb-16">
+                <div id="f6ca7818-947b-4e37-baa4-7a97b8ad0183" class="bento-card">
+                    <h3 id="e518b9c2-c783-445e-b6a9-58787b148bc4" class="text-2xl font-bold mb-4">enum、static const</h3>
+                    <p id="d637360d-e024-415a-bf6c-dce387e7d736" class="text-gray-300">用于存储编译期常量值，作为元函数的返回值或中间计算值。</p>
+                </div>
+                
+                <div id="f9becb2a-9884-424d-830d-26d3794e181a" class="bento-card">
+                    <h3 id="f1f368ff-5c8d-4a0b-b703-3c887d13d9f6" class="text-2xl font-bold mb-4">typedef/using</h3>
+                    <p id="ab158521-c86a-41f2-b611-31f252dac520" class="text-gray-300">用于定义类型别名，是元函数操作类型的主要方式。</p>
+                </div>
+                
+                <div id="f436392f-fd60-45e8-9c65-2e94123c165f" class="bento-card">
+                    <h3 id="b540ca81-be62-40f5-b69a-b0668cec9f36" class="text-2xl font-bold mb-4">模板参数</h3>
+                    <p id="a32658e6-bc09-436e-9a96-f8738b4f6ff8" class="text-gray-300">包括类型参数和非类型参数，是元函数的输入。</p>
+                </div>
+                
+                <div id="a9c5d8de-9774-4287-bd00-e234f82e267c" class="bento-card">
+                    <h3 id="efa9c2e5-caff-48c5-928b-e8809864ccc2" class="text-2xl font-bold mb-4">域运算符</h3>
+                    <p id="c4f97839-6431-4afb-bf88-1307a2327f6a" class="text-gray-300"><code>::</code>用于访问模板类中的静态成员和类型别名。</p>
+                </div>
+            </div>
+            
+            <div id="c59cab76-ade7-41d1-bc67-493c9e97e4b3" class="max-w-4xl mx-auto">
+                <div id="c4290028-1cec-457e-bb13-adfdd9030a44" class="code-block">
+                    <pre><code class="language-cpp">#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+// 使用enum定义编译期常量
+template &lt;typename T&gt;
+struct DataTypeInfo {
+    enum { is_pointer = 0 };  // 默认不是指针类型
+};
+
+// 使用static const定义编译期常量
+template &lt;typename T&gt;
+struct DataTypeSize {
+    static const size_t value = sizeof(T);  // 获取类型大小
+};
+
+// 使用typedef定义类型别名
+template &lt;typename T&gt;
+struct RemoveConst {
+    typedef T type;  // 默认返回原类型
+};
+
+// 特化处理const类型
+template &lt;typename T&gt;
+struct RemoveConst&lt;const T&gt; {
+    typedef T type;  // 移除const限定符
+};
+
+// 使用using定义类型别名（C++11）
+template &lt;typename T&gt;
+using RemoveConstT = typename RemoveConst&lt;T&gt;::type;
+
+int main() {
+    // 使用域运算符访问元数据和类型
+    std::cout &lt;&lt; "Size of int: " &lt;&lt; DataTypeSize&lt;int&gt;::value &lt;&lt; std::endl;
+    
+    // 使用类型别名
+    RemoveConstT&lt;const int&gt; num = 42;  // 类型为int，而不是const int
+    return 0;
+}</code></pre>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Control Structures -->
+        <section id="ef8bf51e-ad1a-4f1f-8a9e-ae9e3080c5e3" class="mb-32 section-reveal">
+            <h2 id="c4df5369-8482-47e2-b283-f0fef95fffce" class="text-6xl md:text-7xl font-bold text-center mb-20">
+                <span class="gradient-text">控制结构</span>
+            </h2>
+            
+            <div id="fa30f2c9-be5c-45a0-a206-28baa61019e9" class="bento-grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+                <div id="e4709a98-f76c-4cb9-88a8-590ea7cd9e9a" class="bento-card">
+                    <div id="d4531dea-8d77-4737-b029-4b1f745b0e49" class="flex items-center mb-6">
+                        <div id="e971a567-1aa1-46af-b6ec-dd951808f0cf" class="w-12 h-12 rounded-full bg-gradient-to-r from-[#0066FF] to-[#0066FF] flex items-center justify-center">
+                            <i class="fas fa-code-branch text-white text-xl"></i>
+                        </div>
+                        <h3 id="ee4c7f34-9d34-465d-8caf-734c38134bd8" class="text-3xl font-bold ml-4">条件判断</h3>
+                    </div>
+                    
+                    <p id="dd2f9da7-abb3-4336-853b-ef8716be4d7f" class="text-gray-300 mb-6">实现编译期的条件逻辑，类似于运行时的if-else语句：</p>
+                    
+                    <ul id="de3e5b85-2c6a-4c73-befc-332a59a984fd" class="text-gray-300 list-disc pl-5 space-y-2 mb-6">
+                        <li>模板特化</li>
+                        <li>std::conditional（C++11）</li>
+                        <li>if constexpr（C++17）</li>
+                    </ul>
+                    
+                    <div id="b5128444-cec5-457c-a303-d9c7e3eeb6cd" class="code-block">
+                        <pre><code class="language-cpp">#include &lt;iostream&gt;
+#include &lt;type_traits&gt;
+
+int main()
+{
+    // 定义一个指定字节数的类型
+    typedef
+        std::conditional&lt;sizeof(char) == 1, char,
+        std::conditional&lt;sizeof(short) == 2,
+            short,
+        std::conditional&lt;sizeof(int) == 4,
+            int,
+        std::conditional&lt;sizeof(long long) == 8,
+            long long,
+        void&gt;::type&gt;::type&gt;::type&gt;::type int_my;
+        
+    std::cout &lt;&lt; sizeof(int_my) &lt;&lt; '\n';  // 输出4
+    return 0;
+}</code></pre>
+                    </div>
+                </div>
+                
+                <div id="b41f37c8-1484-453e-9d62-9ecd83b97a5e" class="bento-card">
+                    <div id="c45d5d13-dd31-4269-ad3e-586dcf8eaba6" class="flex items-center mb-6">
+                        <div id="a45f50fe-7ccb-4066-a139-31404e8fa330" class="w-12 h-12 rounded-full bg-gradient-to-r from-[#FF3366] to-[#FF3366] flex items-center justify-center">
+                            <i class="fas fa-sync-alt text-white text-xl"></i>
+                        </div>
+                        <h3 id="ef6f2df9-93ca-4c2c-9bbd-5089477bff15" class="text-3xl font-bold ml-4">循环展开</h3>
+                    </div>
+                    
+                    <p id="cd8b0bf6-fd79-49f8-884b-4284f4c8cfcb" class="text-gray-300 mb-6">实现编译期的迭代逻辑，类似于运行时的循环语句：</p>
+                    
+                    <ul id="c49a9975-1e9f-4a38-ae1e-66e9b1dbe42e" class="text-gray-300 list-disc pl-5 space-y-2 mb-6">
+                        <li>递归模板实例化</li>
+                        <li>特化终止递归</li>
+                    </ul>
+                    
+                    <div id="a9c6f236-d0ad-4f09-af95-b05a951f6c6c" class="code-block">
+                        <pre><code class="language-cpp">#include &lt;iostream&gt;
+
+// 通用模板：计算从1到N的和
+template &lt;int N&gt;
+class sum
+{
+public: 
+    static const int ret = sum&lt;N-1&gt;::ret + N;
+};
+
+// 特化模板：递归终止条件
+template &lt;&gt;
+class sum&lt;0&gt;
+{
+public: 
+    static const int ret = 0;
+};
+
+int main()
+{
+    std::cout &lt;&lt; sum&lt;5&gt;::ret &lt;&lt; std::endl;  // 输出15 (1+2+3+4+5)
+    return 0;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Advanced Techniques -->
+        <section id="a5e5f4fc-820f-4357-b39b-ab003a17b016" class="mb-32 section-reveal">
+            <h2 id="bf7abcc3-553e-45a5-8a71-a0d0a0eadc24" class="text-6xl md:text-7xl font-bold text-center mb-20">
+                <span class="accent-gradient-text">高级技术</span>
+            </h2>
+            
+            <div id="fbf6231c-aa9c-4933-a302-24001fccadc6" class="bento-grid grid-cols-1 md:grid-cols-3 mb-16">
+                <div id="b91aed40-f183-498b-8e6e-56e610449f12" class="bento-card md:col-span-3">
+                    <h3 id="c0767883-b15c-454e-93e9-87fd98f90993" class="text-4xl font-bold mb-6">Traits 特性</h3>
+                    <p id="d2499219-5284-4575-b5d3-9c2171a9c73a" class="text-gray-300 mb-6">
+                        Traits是一种用于提取或操作类型属性的模板技术，可以用于获取容器元素类型、迭代器特性等。
+                    </p>
+                    
+                    <div id="cd8edbcb-ad38-4a9d-a478-3824e920f0ba" class="code-block">
+                        <pre><code class="language-cpp">// 通用迭代器的traits
+template &lt;typename iter&gt;
+class mytraits // 标准容器通过这里获取容器元素的类型
+{
+public: 
+    typedef typename iter::value_type value_type;
+};
+
+// 数组类型的特化
+template &lt;typename T&gt;
+class mytraits&lt;T*&gt; // 数组类型的容器，通过这里获取数组元素的类型
+{
+public: 
+    typedef T value_type;
+};
+
+// 使用traits实现通用的求和函数
+template &lt;typename iter&gt;
+typename mytraits&lt;iter&gt;::value_type mysum(iter begin, iter end)
+{
+    typename mytraits&lt;iter&gt;::value_type sum(0);
+    for(iter i=begin; i!=end; ++i)
+        sum += *i;
+    return sum;
+}</code></pre>
+                    </div>
+                </div>
+                
+                <div id="a841686b-a2e3-486e-beea-9428bd7b4729" class="bento-card">
+                    <h3 id="b8e79bc3-9429-4c21-ad35-06b22c9a2309" class="text-3xl font-bold mb-4">Policy 策略</h3>
+                    <p id="ceffb44e-47a8-403a-8226-2dd4971ef23a" class="text-gray-300 mb-4">
+                        策略是一种设计模式，通过模板参数化行为，允许用户自定义组件的某些行为。
+                    </p>
+                    
+                    <div id="c8359eb8-223b-4506-9db5-c0bff423d9b3" class="code-block">
+                        <pre><code class="language-cpp">template &lt;class T, class Allocator = std::allocator&lt;T&gt;&gt;
+class vector;</code></pre>
+                    </div>
+                </div>
+                
+                <div id="f75f2eda-6354-4387-a0dc-ba409ef8b08c" class="bento-card">
+                    <h3 id="f25fa38a-9dec-4e1f-a0d0-a2ec975e3fd5" class="text-3xl font-bold mb-4">Tag 标签</h3>
+                    <p id="b5fe984e-20b0-449f-8197-947e6603e126" class="text-gray-300 mb-4">
+                        标签是空的类型，用于标识不同的行为或类型，以实现函数重载或特化选择。
+                    </p>
+                    
+                    <div id="ae2bc38c-cf3e-4f57-b144-dcdf3f7971a0" class="code-block">
+                        <pre><code class="language-cpp">struct input_iterator_tag {};
+struct output_iterator_tag {};
+struct forward_iterator_tag {};
+struct bidirectional_iterator_tag {};
+struct random_access_iterator_tag {};</code></pre>
+                    </div>
+                </div>
+                
+                <div id="e29311e1-988f-4550-9384-3f17e2298c55" class="bento-card md:col-span-3">
+                    <h3 id="de14879c-fd0e-48e9-b88a-d4f2d3338a68" class="text-3xl font-bold mb-4">is_same 类型比较</h3>
+                    <p id="eacda069-1ae0-48fe-8117-5203723bcc7c" class="text-gray-300 mb-4">
+                        C++标准库中的类型萃取工具，用于比较两个类型是否相同。
+                    </p>
+                    
+                    <div id="bff19b6f-1b01-4ff0-accc-0d6e8a8d3f3f" class="code-block">
+                        <pre><code class="language-cpp">#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;type_traits&gt;
+
+int main()
+{
+    std::cout &lt;&lt; std::is_same&lt;
+        std::vector&lt;int&gt;::iterator::iterator_category, 
+        std::random_access_iterator_tag
+    &gt;::value &lt;&lt; std::endl;  // 输出1
+    return 0;
+}</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Examples -->
+        <section id="fd46b9c5-d074-40b4-bf84-aa8cc6f0d8b1" class="mb-32 section-reveal">
+            <h2 id="c1c8a590-122c-41ca-b08a-7d9d4d8fc443" class="text-6xl md:text-8xl font-bold text-center mb-12">
+                <span class="gradient-text">实例</span>
+            </h2>
+            
+            <div id="b31ce5ac-98bd-4f51-8fd8-ac05059ff4fa" class="max-w-4xl mx-auto mb-16">
+                <h3 id="a12d4b7c-f4aa-47a9-9256-4bc6fec67e60" class="text-3xl font-bold mb-6">编译期计算斐波那契数列</h3>
+                
+                <div id="f7c33d53-a5db-4f80-8c99-c8b0c52a200e" class="code-block">
+                    <pre><code class="language-cpp">#include &lt;iostream&gt;
+
+// 编译期计算斐波那契数列
+template &lt;int N&gt;
+struct Fibonacci {
+    static const int value = Fibonacci&lt;N-1&gt;::value + Fibonacci&lt;N-2&gt;::value;
+};
+
+// 特化处理递归终止条件
+template &lt;&gt;
+struct Fibonacci&lt;0&gt; {
+    static const int value = 0;
+};
+
+template &lt;&gt;
+struct Fibonacci&lt;1&gt; {
+    static const int value = 1;
+};
+
+int main() {
+    // 在编译期计算斐波那契数列的第10项
+    std::cout &lt;&lt; "Fibonacci(10) = " &lt;&lt; Fibonacci&lt;10&gt;::value &lt;&lt; std::endl;
+    return 0;
+}</code></pre>
+                </div>
+                
+                <p id="a4bd436b-6acb-4e65-98d0-3a176aeea6ab" class="text-gray-400 text-center mt-4">
+                    上述代码在<span class="accent-gradient-text font-semibold">编译期间</span>就计算出斐波那契数列的第10项，运行时无需计算。
+                </p>
+            </div>
+            
+            <div id="b9697621-7714-4d24-9d92-e99077d914e4" class="max-w-4xl mx-auto">
+                <h3 id="bcffa52e-c758-4d53-84be-1e2f3df69922" class="text-3xl font-bold mb-6">C++17的if constexpr示例</h3>
+                
+                <div id="e965929b-0c69-49e2-a0b1-f086dc883deb" class="code-block">
+                    <pre><code class="language-cpp">template &lt;typename T&gt;
+auto process(T value) {
+    if constexpr (std::is_integral_v&lt;T&gt;) {
+        return value * 2;  // 整数类型处理
+    } else if constexpr (std::is_floating_point_v&lt;T&gt;) {
+        return value * 2.0;  // 浮点类型处理
+    } else {
+        return value;  // 其他类型处理
+    }
+}</code></pre>
+                </div>
+                
+                <p id="b428cfab-ba7a-43ea-b6a8-16c7806fe386" class="text-gray-400 text-center mt-4">
+                    C++17引入的<code>if constexpr</code>极大简化了模板元编程中的条件判断。
+                </p>
+            </div>
+        </section>
+        
+        <!-- Use Cases -->
+        <section id="cb3c35a7-9af9-4899-9a23-a353676ef266" class="mb-32 section-reveal">
+            <h2 id="d6566307-7aee-4299-9e93-054a5289a358" class="text-6xl md:text-7xl font-bold text-center mb-20">
+                <span class="gradient-text">使用场景</span>
+            </h2>
+            
+            <div id="fa2501bf-004c-4260-aa01-5196688b632c" class="bento-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 mb-16">
+                <div id="d1ba8bd5-f1e7-4eb2-b18e-23a54a0df588" class="bento-card lg:col-span-2">
+                    <h3 id="ac97904f-8e6f-4862-9eb4-348a843da20d" class="text-2xl font-bold mb-2">编译期计算</h3>
+                    <p id="fac4ca9a-24ea-4ed0-94ba-a7b4be2c150e" class="text-gray-300">将运行时计算移至编译期，提高性能，如常数计算、查找表生成等。</p>
+                </div>
+                
+                <div id="c0563245-df2a-4426-b0d2-51cfda43c5d9" class="bento-card lg:col-span-3">
+                    <h3 id="c335b1a8-a389-4ce8-9c57-7c60ce467f7c" class="text-2xl font-bold mb-2">类型萃取与转换</h3>
+                    <p id="ad0880c5-48a2-4d6f-9768-52e53870a173" class="text-gray-300">提取、转换或修改类型特征，如 <code>std::remove_const</code>, <code>std::is_same</code>, <code>std::enable_if</code> 等。</p>
+                </div>
+                
+                <div id="f5907682-783a-43a8-8c34-2d24c56f158a" class="bento-card lg:col-span-2">
+                    <h3 id="fa2202e4-9e69-4826-9512-b4559feb0532" class="text-2xl font-bold mb-2">优化代码生成</h3>
+                    <p id="ae563111-ff6a-4f6e-9fda-b353c12cc0fb" class="text-gray-300">根据编译期常量生成效率更高的特化代码，消除运行时分支。</p>
+                </div>
+                
+                <div id="ef33c3b1-6a60-4443-9394-9efba39bcff6" class="bento-card">
+                    <h3 id="af98c88c-3fa2-4a8e-b8b3-ae9e4fa3a55a" class="text-2xl font-bold mb-2">静态断言</h3>
+                    <p id="fe75d0e0-32be-4e62-9c86-7e7be84f7dd1" class="text-gray-300">在编译期验证类型约束和代码正确性。</p>
+                </div>
+                
+                <div id="ecaaf3ea-16f5-41ce-bb5a-83a456d174b6" class="bento-card lg:col-span-2">
+                    <h3 id="e82058a5-5dae-4644-bdda-ddcb0288c16e" class="text-2xl font-bold mb-2">DSL实现</h3>
+                    <p id="b496b6cd-738f-4156-a3dc-de42da7fd30d" class="text-gray-300">构建领域特定语言，提供更高级的抽象，如Boost.Spirit、Boost.Proto等。</p>
+                </div>
+            </div>
+            
+            <!-- Data Visualization - Flow Chart -->
+            <div id="e7b298a4-7173-41f2-b39f-1a36f53d46ca" class="max-w-5xl mx-auto h-[500px]">
+                <div id="ec187adf-8dbd-4c5a-8096-d1c63cf2cb37" class="w-full h-full"></div>
+            </div>
+        </section>
+        
+        <!-- C++ Version Improvements -->
+        <section id="c3a5418d-4cf2-4052-a4f5-82526eb0e495" class="mb-32 section-reveal">
+            <h2 id="d5c1e41b-c928-42a0-8427-4c042a1a8268" class="text-5xl md:text-6xl font-bold text-center mb-20">
+                <span class="accent-gradient-text">版本改进</span>
+            </h2>
+            
+            <div id="fd1fd26f-ff3e-46cb-9da7-1f73dc32f24d" class="bento-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                <div id="c84736b0-0433-43a5-8cc0-d93b30dba416" class="bento-card h-full">
+                    <div id="e09a53a2-2673-49f4-a1a1-1fe8cd1567c9" class="text-center mb-6">
+                        <span id="e4018900-b060-41ec-bf47-6548aa5ec365" class="text-6xl font-bold gradient-text">C++11</span>
+                    </div>
+                    <ul id="c74dc868-96c2-4167-b27d-e7804947dc17" class="text-gray-300 list-disc pl-5 space-y-3">
+                        <li>类型萃取库(<code>type_traits</code>)</li>
+                        <li>可变参数模板</li>
+                        <li>模板别名(<code>using</code>)</li>
+                        <li>编译期常量表达式(<code>constexpr</code>)</li>
+                        <li>静态断言(<code>static_assert</code>)</li>
+                        <li>右值引用和完美转发</li>
+                    </ul>
+                </div>
+                
+                <div id="d8718aed-e575-44c3-ac1c-3f8790046094" class="bento-card h-full">
+                    <div id="a8675fd4-0088-4a26-9fbc-0d60b7d7de85" class="text-center mb-6">
+                        <span id="c0c725aa-c9d0-4f9a-9450-257157682dde" class="text-6xl font-bold gradient-text">C++14/17</span>
+                    </div>
+                    <ul id="dc6781a0-2c11-41a6-a142-37ae4575b6bb" class="text-gray-300 list-disc pl-5 space-y-3">
+                        <li>变量模板</li>
+                        <li>改进的<code>constexpr</code>函数</li>
+                        <li>编译期<code>if constexpr</code></li>
+                        <li>折叠表达式</li>
+                        <li>类模板参数推导</li>
+                        <li>结构化绑定</li>
+                    </ul>
+                </div>
+                
+                <div id="a8b10ebd-4290-4445-b9fe-8dbe9ee41c95" class="bento-card h-full">
+                    <div id="c6069395-ab48-4f1b-a4bd-348b57b3d0f6" class="text-center mb-6">
+                        <span id="af7be49d-96cc-493d-928c-41b0c3da595b" class="text-6xl font-bold gradient-text">C++20</span>
+                    </div>
+                    <ul id="c1e18f87-5782-4c7c-ad0d-7a1463e69f02" class="text-gray-300 list-disc pl-5 space-y-3">
+                        <li>概念(<code>concepts</code>)</li>
+                        <li>约束(<code>requires</code>子句)</li>
+                        <li>编译期反射初步支持</li>
+                        <li>协程</li>
+                        <li>模块系统</li>
+                        <li><code>consteval</code>和<code>constinit</code>关键字</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Pros and Cons -->
+        <section id="abda1f95-0e12-42c7-b78f-6dfa2ba58e8b" class="mb-32 section-reveal">
+            <h2 id="db9c5863-98f9-4a21-9e41-ca6d095de535" class="text-6xl md:text-7xl font-bold text-center mb-20">
+                <span class="gradient-text">优缺点</span>
+            </h2>
+            
+            <div id="f827073f-13a8-450c-9b6f-5021c96dcb75" class="bento-grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div id="eb524bef-c5fb-418b-ad92-894eb584b2bd" class="bento-card">
+                    <div id="f8c1b344-f0e1-4b6c-8c11-8867d01027e8" class="flex items-center mb-6">
+                        <div id="e76f7bde-b0a0-42b1-b9d7-d35cd45bb975" class="w-12 h-12 rounded-full bg-gradient-to-r from-[#00CCFF] to-[#00CCFF] flex items-center justify-center">
+                            <i class="fas fa-plus text-white text-xl"></i>
+                        </div>
+                        <h3 id="db4fe14b-3f0c-4973-8674-2cd42c6eb4ed" class="text-3xl font-bold ml-4">优点</h3>
+                    </div>
+                    
+                    <ul id="b0ac8daf-b45e-44df-ab1d-a02ed8bbbd8c" class="text-gray-300 list-disc pl-5 space-y-4">
+                        <li><span class="font-bold">编译期计算</span>：将计算从运行时移至编译时，提高运行时性能。</li>
+                        <li><span class="font-bold">类型安全</span>：在编译期进行类型检查，捕获潜在错误。</li>
+                        <li><span class="font-bold">代码优化</span>：通过减少运行时分支和决策，生成更高效的代码。</li>
+                        <li><span class="font-bold">零运行时开销抽象</span>：编译期生成代码，运行时无额外开销。</li>
+                        <li><span class="font-bold">通用性</span>：可以编写高度通用的算法和容器。</li>
+                    </ul>
+                </div>
+                
+                <div id="c0319bd7-f8b5-47e5-982a-3372ad7f4ab3" class="bento-card">
+                    <div id="e9291d2b-6561-4e90-8eae-9c8e40dee0c2" class="flex items-center mb-6">
+                        <div id="c87c1ce1-6d22-4858-aa91-1c24974838ce" class="w-12 h-12 rounded-full bg-gradient-to-r from-[#FF3366] to-[#FF3366] flex items-center justify-center">
+                            <i class="fas fa-minus text-white text-xl"></i>
+                        </div>
+                        <h3 id="a3580287-6e1d-4259-929e-7a638d678a40" class="text-3xl font-bold ml-4">缺点</h3>
+                    </div>
+                    
+                    <ul id="f2499a45-b8cb-4497-8c63-2dcd0fc628da" class="text-gray-300 list-disc pl-5 space-y-4">
+                        <li><span class="font-bold">复杂性</span>：语法晦涩，学习曲线陡峭。</li>
+                        <li><span class="font-bold">错误信息</span>：难以理解的编译错误，尤其是嵌套模板。</li>
+                        <li><span class="font-bold">编译时间</span>：大量使用模板会显著增加编译时间。</li>
+                        <li><span class="font-bold">调试困难</span>：模板在编译期执行，难以调试。</li>
+                        <li><span class="font-bold">可读性降低</span>：过度使用会降低代码可读性和可维护性。</li>
+                        <li><span class="font-bold">二进制膨胀</span>：模板实例化可能导致代码体积增大。</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Practical Tips -->
+        <section id="e8b1f359-a5d6-44ff-8c12-1740477152f0" class="mb-32 section-reveal">
+            <h2 id="f6b99b1a-4eda-419f-8be6-938b9ee6b893" class="text-6xl md:text-7xl font-bold text-center mb-16">
+                <span class="accent-gradient-text">实践建议</span>
+            </h2>
+            
+            <div id="e68304a2-3ffc-444e-9aed-2fcf165eee0e" class="max-w-4xl mx-auto">
+                <div id="a54d022b-9150-4a75-9db3-f94a83301f91" class="bento-card mb-8">
+                    <ol id="accd92f4-ea14-43fc-9c09-8221507743b9" class="text-gray-300 list-decimal pl-8 space-y-6">
+                        <li>
+                            <span class="text-white text-xl font-bold">适度使用</span>
+                            <p class="mt-2">只在必要的地方使用模板元编程，避免过度工程化。对于简单问题，使用常规编程方式。</p>
+                        </li>
+                        <li>
+                            <span class="text-white text-xl font-bold">简化接口</span>
+                            <p class="mt-2">尽量提供简洁的对外接口，将复杂的模板元编程隐藏在实现细节中。</p>
+                        </li>
+                        <li>
+                            <span class="text-white text-xl font-bold">详细注释</span>
+                            <p class="mt-2">为复杂的模板代码添加详细注释，解释模板参数、特化条件和实现思路。</p>
+                        </li>
+                        <li>
+                            <span class="text-white text-xl font-bold">利用新特性</span>
+                            <p class="mt-2">使用C++11及更高版本提供的工具简化模板元编程，如<code>type_traits</code>、<code>if constexpr</code>、<code>concepts</code>等。</p>
+                        </li>
+                        <li>
+                            <span class="text-white text-xl font-bold">单元测试</span>
+                            <p class="mt-2">为模板元编程编写详细的单元测试，验证在各种类型和条件下的行为。</p>
+                        </li>
+                        <li>
+                            <span class="text-white text-xl font-bold">分解复杂任务</span>
+                            <p class="mt-2">将复杂的模板元编程任务分解为小的、可管理的组件，提高可读性和可维护性。</p>
+                        </li>
+                        <li>
+                            <span class="text-white text-xl font-bold">考虑替代方案</span>
+                            <p class="mt-2">评估是否可以使用更简单的方法实现目标，如<code>constexpr</code>函数、运行时多态等。</p>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Summary -->
+        <section id="d40d08d1-ba3c-4b17-be93-ec80c36d10cc" class="mb-20 section-reveal">
+            <h2 id="c95a30c2-2741-4527-8aec-cc67c6f6719b" class="text-6xl md:text-8xl font-bold text-center mb-16">
+                <span class="gradient-text">总结</span>
+            </h2>
+            
+            <div id="d1660b77-50bc-43b9-bd1c-3fafe629abd7" class="max-w-4xl mx-auto text-center">
+                <p id="db283431-e378-414c-a269-745f995d6c5e" class="text-2xl text-gray-300 leading-relaxed">
+                    模板元编程是C++中一种强大但复杂的技术，它允许我们在编译期进行计算和类型操作，实现零运行时开销的抽象。
+                </p>
+                <p id="dda032d8-ffc4-4c4c-a7c8-de373c93c3d2" class="text-2xl text-gray-300 leading-relaxed mt-6">
+                    虽然学习曲线陡峭，但掌握模板元编程技术可以帮助我们编写更高效、更通用、更安全的代码，特别是在性能敏感的场景中。
+                </p>
+                <p id="bccea120-8be9-4aad-a796-0389ae7fd74d" class="text-2xl text-gray-300 leading-relaxed mt-6">
+                    随着C++标准的发展，模板元编程变得更加强大且易于使用，但我们仍需权衡其复杂性和收益，在适当的场景中合理应用这一技术。
+                </p>
+            </div>
+        </section>
+    </main>
+    
+    <footer id="ed2adef0-e9b3-45e0-a5b5-6592f78611c0" class="container mx-auto px-4 py-10 border-t border-gray-800">
+        <div id="a1ea9eca-02e0-49ed-a716-c98c43a98766" class="text-center text-gray-400">
+            <p id="b87c8a3f-3784-4a91-bca6-6094688d6f98">© 2025 C++模板元编程详解</p>
+        </div>
+    </footer>
+    
+    <script>
+        // Initialize intersection observer for scroll animations
+        document.addEventListener('DOMContentLoaded', function() {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('section-visible');
+                    }
+                });
+            }, {
+                threshold: 0.1
+            });
+            
+            document.querySelectorAll('.section-reveal').forEach(section => {
+                observer.observe(section);
+            });
+            
+            // Initialize ECharts for flow chart
+            const chartDom = document.getElementById('ec187adf-8dbd-4c5a-8096-d1c63cf2cb37');
+            const myChart = echarts.init(chartDom);
+            
+            const option = {
+                backgroundColor: 'rgba(0,0,0,0)',
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}'
+                },
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    animation: true,
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: '{b}',
+                        color: '#fff',
+                        fontSize: 14
+                    },
+                    draggable: false,
+                    data: [
+                        { name: '模板元编程(TMP)', value: 20, itemStyle: { color: '#0066FF' }, symbolSize: 60 },
+                        { name: '编译期执行', value: 15, symbolSize: 40, itemStyle: { color: '#00AAFF' } },
+                        { name: '图灵完备性', value: 15, symbolSize: 40, itemStyle: { color: '#00AAFF' } },
+                        { name: '函数式风格', value: 15, symbolSize: 40, itemStyle: { color: '#00AAFF' } },
+                        
+                        { name: '元数据(Meta-Data)', value: 15, symbolSize: 45, itemStyle: { color: '#FF3366' } },
+                        { name: '元函数(Meta-Function)', value: 15, symbolSize: 45, itemStyle: { color: '#FF3366' } },
+                        
+                        { name: 'enum枚举常量', value: 10, symbolSize: 30, itemStyle: { color: '#FF9900' } },
+                        { name: 'static const静态常量', value: 10, symbolSize: 30, itemStyle: { color: '#FF9900' } },
+                        { name: '类型Type', value: 10, symbolSize: 30, itemStyle: { color: '#FF9900' } },
+                        
+                        { name: '模板类', value: 10, symbolSize: 30, itemStyle: { color: '#33CCCC' } },
+                        { name: '模板特化', value: 10, symbolSize: 30, itemStyle: { color: '#33CCCC' } },
+                        { name: '模板偏特化', value: 10, symbolSize: 30, itemStyle: { color: '#33CCCC' } },
+                        
+                        { name: '条件判断', value: 12, symbolSize: 35, itemStyle: { color: '#9966FF' } },
+                        { name: '循环展开', value: 12, symbolSize: 35, itemStyle: { color: '#9966FF' } },
+                        
+                        { name: 'std::conditional', value: 10, symbolSize: 25, itemStyle: { color: '#CC99FF' } },
+                        { name: '递归模板实例化', value: 10, symbolSize: 25, itemStyle: { color: '#CC99FF' } },
+                        { name: '特化终止递归', value: 10, symbolSize: 25, itemStyle: { color: '#CC99FF' } },
+                        
+                        { name: 'Traits特性', value: 12, symbolSize: 35, itemStyle: { color: '#33CC99' } },
+                        { name: 'Policy策略', value: 12, symbolSize: 35, itemStyle: { color: '#33CC99' } },
+                        { name: 'Tag标签', value: 12, symbolSize: 35, itemStyle: { color: '#33CC99' } }
+                    ],
+                    links: [
+                        { source: '模板元编程(TMP)', target: '编译期执行' },
+                        { source: '模板元编程(TMP)', target: '图灵完备性' },
+                        { source: '模板元编程(TMP)', target: '函数式风格' },
+                        
+                        { source: '模板元编程(TMP)', target: '元数据(Meta-Data)' },
+                        { source: '模板元编程(TMP)', target: '元函数(Meta-Function)' },
+                        
+                        { source: '元数据(Meta-Data)', target: 'enum枚举常量' },
+                        { source: '元数据(Meta-Data)', target: 'static const静态常量' },
+                        { source: '元数据(Meta-Data)', target: '类型Type' },
+                        
+                        { source: '元函数(Meta-Function)', target: '模板类' },
+                        { source: '元函数(Meta-Function)', target: '模板特化' },
+                        { source: '元函数(Meta-Function)', target: '模板偏特化' },
+                        
+                        { source: '模板元编程(TMP)', target: '条件判断' },
+                        { source: '模板元编程(TMP)', target: '循环展开' },
+                        
+                        { source: '条件判断', target: '模板特化' },
+                        { source: '条件判断', target: 'std::conditional' },
+                        
+                        { source: '循环展开', target: '递归模板实例化' },
+                        { source: '循环展开', target: '特化终止递归' },
+                        
+                        { source: '模板元编程(TMP)', target: 'Traits特性' },
+                        { source: '模板元编程(TMP)', target: 'Policy策略' },
+                        { source: '模板元编程(TMP)', target: 'Tag标签' }
+                    ],
+                    lineStyle: {
+                        opacity: 0.9,
+                        width: 2,
+                        curveness: 0,
+                        color: 'rgba(255,255,255,0.3)'
+                    },
+                    force: {
+                        repulsion: 200,
+                        layoutAnimation: true
+                    }
+                }]
+            };
+            
+            myChart.setOption(option);
+            
+            // Resize chart when window size changes
+            window.addEventListener('resize', function() {
+                myChart.resize();
+            });
+            
+            // Highlight syntax with Prism.js
+            Prism.highlightAll();
+        });
+        
+        // Apple-style scroll animations
+        window.addEventListener('scroll', function() {
+            const scrollY = window.scrollY;
+            const windowHeight = window.innerHeight;
+            
+            // Animate background elements based on scroll position
+            const bgElements = document.querySelectorAll('#e7c55181-2732-4436-aebe-4068a69a6db1 > div');
+            bgElements.forEach((el, index) => {
+                const speed = 0.05 * (index + 1);
+                const yPos = scrollY * speed;
+                el.style.transform = `translateY(${yPos}px) rotate(${yPos / 10}deg)`;
+            });
+            
+            // Fade out scroll indicator when scrolling starts
+            const scrollIndicator = document.getElementById('ff2d0696-5532-42fd-9b29-4da1a2491839');
+            if (scrollIndicator) {
+                scrollIndicator.style.opacity = 1 - scrollY / 200;
+            }
+        });
+    </script>
+</body>
+</html>
