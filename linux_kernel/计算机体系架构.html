@@ -1,0 +1,2099 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>计算机体系架构 | Computer Architecture</title>
+    <!-- TailwindCSS -->
+    <script src="https://fastly.jsdelivr.net/npm/tailwindcss@3.3.5/lib/index.min.js"></script>
+    <!-- Font Awesome -->
+    <link href="https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.2/css/all.min.css" rel="stylesheet">
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- Framer Motion -->
+    <script src="https://fastly.jsdelivr.net/npm/framer-motion@10.16.4/dist/framer-motion.umd.min.js"></script>
+    <!-- ECharts -->
+    <script src="https://fastly.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/components/prism-c.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/components/prism-asm6502.min.js"></script>
+    <!-- KaTeX for math equations -->
+    <link rel="stylesheet" href="https://fastly.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://fastly.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100;200;300;400;500;600;700;800;900&display=swap');
+        
+        :root {
+            --primary: #0066FF;
+            --secondary: #7000FF;
+            --accent: #FF0066;
+            --dark: #111827;
+            --light: #F9FAFB;
+        }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background-color: var(--light);
+            color: var(--dark);
+            overflow-x: hidden;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .primary-gradient {
+            background: linear-gradient(135deg, rgba(0, 102, 255, 0.9), rgba(0, 102, 255, 0.3));
+        }
+        
+        .secondary-gradient {
+            background: linear-gradient(135deg, rgba(112, 0, 255, 0.9), rgba(112, 0, 255, 0.3));
+        }
+        
+        .accent-gradient {
+            background: linear-gradient(135deg, rgba(255, 0, 102, 0.9), rgba(255, 0, 102, 0.3));
+        }
+        
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+        
+        .bento-cell {
+            border-radius: 1.5rem;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        }
+        
+        .bento-cell:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .appear {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        
+        .appear.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .highlight-code {
+            border-radius: 0.75rem;
+            overflow: hidden;
+        }
+        
+        .math-block {
+            overflow-x: auto;
+            padding: 1rem;
+            background-color: rgba(249, 250, 251, 0.8);
+            border-radius: 0.75rem;
+        }
+        
+        /* Apple-like scroll animations */
+        .parallax-container {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .parallax-element {
+            will-change: transform;
+            transition: transform 0.1s ease-out;
+        }
+        
+        .sticky-section {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            z-index: 1000;
+            width: 0%;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+        
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            .bento-grid {
+                grid-template-columns: repeat(6, 1fr);
+            }
+            
+            .display-text {
+                font-size: 2.5rem !important;
+            }
+            
+            .section-title {
+                font-size: 2rem !important;
+            }
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <!-- Progress bar -->
+    <div id="progress-bar" class="progress-bar"></div>
+    
+    <!-- Hero section -->
+    <section id="hero" class="h-screen flex items-center justify-center relative overflow-hidden">
+        <div class="absolute inset-0 z-0">
+            <div class="grid grid-cols-6 grid-rows-6 h-full w-full opacity-5">
+                <div class="col-span-1 row-span-1 border border-gray-300"></div>
+                <!-- Repeat for all 36 cells -->
+            </div>
+        </div>
+        <div class="container mx-auto px-6 z-10">
+            <div class="flex flex-col items-center text-center">
+                <h5 class="text-sm uppercase tracking-widest mb-4 opacity-75 appear">COMPUTER SCIENCE FUNDAMENTALS</h5>
+                <h1 class="text-7xl md:text-8xl font-bold mb-8 appear display-text">
+                    <span class="gradient-text">计算机</span><br>
+                    <span class="gradient-text">体系架构</span>
+                </h1>
+                <p class="text-xl md:text-2xl max-w-3xl mx-auto mb-12 appear">
+                    从冯·诺伊曼架构到量子计算，探索计算机系统的底层设计原理
+                    <span class="text-sm text-gray-500 block mt-2">COMPUTER ARCHITECTURE</span>
+                </p>
+                <div class="appear">
+                    <a href="#introduction" class="inline-flex items-center gap-2 bg-gray-900 text-white px-8 py-4 rounded-full hover:bg-gray-800 transition-colors">
+                        开始探索 <i class="material-icons">arrow_downward</i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="absolute bottom-10 left-1/2 -translate-x-1/2 appear">
+            <div class="animate-bounce">
+                <i class="material-icons text-3xl text-gray-400">expand_more</i>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Introduction section -->
+    <section id="introduction" class="py-20 md:py-32 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <div class="bento-grid">
+                <div class="col-span-12 md:col-span-8 appear bento-cell bg-white p-10">
+                    <h2 class="text-4xl font-bold mb-8 section-title">计算机体系架构的<span class="gradient-text">基本概念</span></h2>
+                    <p class="text-lg mb-6">计算机体系架构（Computer Architecture）是研究计算机系统的组织、设计和实现的学科，它关注计算机系统各个层次的功能、结构和行为，以及它们之间的关系。</p>
+                    <p class="text-lg">体系架构既包括硬件抽象级别（如指令集架构），也包括微架构、功能单元的组织方式以及存储系统的设计。</p>
+                </div>
+                <div class="col-span-12 md:col-span-4 appear bento-cell primary-gradient p-8 text-white">
+                    <div class="flex flex-col h-full justify-center items-center">
+                        <p class="text-sm uppercase tracking-wider mb-4">DEFINITION</p>
+                        <h3 class="text-3xl font-bold text-center">计算机体系架构是关于如何<span class="text-4xl block mt-2">设计、组织与实现</span>计算机系统的学科</h3>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">体系架构的层次结构</h3>
+                    <div id="arch-layers-chart" class="w-full h-72"></div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell secondary-gradient p-8 text-white">
+                    <div class="flex flex-col h-full justify-between">
+                        <h3 class="text-2xl font-bold mb-4">范畴与研究内容</h3>
+                        <ul class="list-disc pl-5 space-y-2">
+                            <li>指令集架构（ISA）设计</li>
+                            <li>微处理器设计与实现</li>
+                            <li>存储系统层次结构</li>
+                            <li>并行与分布式处理</li>
+                            <li>输入/输出系统</li>
+                            <li>性能评估与优化</li>
+                            <li>可靠性与容错设计</li>
+                            <li>功耗管理</li>
+                            <li>安全架构设计</li>
+                        </ul>
+                        <div class="text-xs mt-6 opacity-70">COMPUTER ARCHITECTURE DOMAINS</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Von Neumann & Harvard Architecture -->
+    <section id="basic-architecture" class="py-20 md:py-32">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-bold mb-16 text-center section-title">关键<span class="gradient-text">组成部分</span></h2>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 md:col-span-7 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">冯·诺依曼架构 <span class="text-base font-normal text-gray-500">Von Neumann Architecture</span></h3>
+                    <p class="text-lg mb-6">冯·诺依曼架构是现代计算机的基础，由约翰·冯·诺依曼在1945年提出。其核心特点是指令和数据存储在同一个内存空间中。</p>
+                    <p class="text-lg mb-6">冯·诺依曼架构的主要组件包括：</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>中央处理单元（CPU）</li>
+                        <li>存储器</li>
+                        <li>输入/输出设备</li>
+                        <li>总线系统</li>
+                    </ul>
+                    <p class="text-lg">这种架构的最大限制是所谓的"冯·诺依曼瓶颈"——CPU和内存之间的数据传输速度限制了系统性能。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-5 appear bento-cell bg-gray-50 p-6">
+                    <div id="von-neumann-diagram" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-5 appear bento-cell bg-gray-50 p-6">
+                    <div id="harvard-diagram" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-7 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">哈佛架构 <span class="text-base font-normal text-gray-500">Harvard Architecture</span></h3>
+                    <p class="text-lg mb-6">哈佛架构与冯·诺依曼架构的主要区别在于它将指令存储和数据存储分开，使用独立的总线进行访问。</p>
+                    <p class="text-lg mb-6">哈佛架构的优势：</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>允许同时访问指令和数据，提高处理速度</li>
+                        <li>指令和数据可以具有不同的字长</li>
+                        <li>更好的安全性，指令内存可设为只读</li>
+                    </ul>
+                    <p class="text-lg">现代CPU设计中通常采用修改版的哈佛架构，如在缓存层面区分指令和数据缓存。</p>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell accent-gradient p-10 text-white">
+                    <div class="flex flex-col md:flex-row justify-between items-center">
+                        <div class="md:w-2/3">
+                            <h3 class="text-3xl font-bold mb-4">架构比较</h3>
+                            <p class="mb-6">冯·诺依曼架构和哈佛架构各有优缺点，在实际应用中，现代处理器通常采用混合设计。例如，在高级缓存中采用哈佛架构的分离式设计，而在主存中使用冯·诺依曼架构的统一存储。</p>
+                            <p>这样的混合设计结合了两种架构的优点，既获得了哈佛架构的性能优势，又保持了冯·诺依曼架构的灵活性。</p>
+                        </div>
+                        <div class="md:w-1/3 text-center">
+                            <div class="text-8xl font-bold opacity-80 mt-6 md:mt-0">VS</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Instruction Set Architecture -->
+    <section id="isa" class="py-20 md:py-32 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-bold mb-16 text-center section-title">指令系统架构 <span class="gradient-text">ISA</span></h2>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">指令系统架构概述</h3>
+                    <p class="text-lg mb-6">指令集架构（Instruction Set Architecture，ISA）是计算机体系结构中的一个抽象层，它定义了软件如何控制处理器。ISA包括了指令集、寄存器、内存访问、I/O模型等组件的规范。</p>
+                    <p class="text-lg">ISA是软件和硬件之间的接口，它定义了程序员或编译器可以使用的指令和操作，而不涉及这些指令在硬件中如何实现。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell primary-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-6">CISC架构</h3>
+                    <h4 class="text-xl font-semibold mb-4">复杂指令集计算机<br><span class="text-sm font-normal opacity-80">Complex Instruction Set Computer</span></h4>
+                    <p class="mb-4">CISC架构的特点是拥有大量复杂指令，单条指令可以执行多个低级操作，如内存访问、算术运算等。</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>指令数量多且复杂</li>
+                        <li>变长指令格式</li>
+                        <li>丰富的寻址模式</li>
+                        <li>较少的通用寄存器</li>
+                    </ul>
+                    <p>代表架构：x86, x86-64, VAX</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell secondary-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-6">RISC架构</h3>
+                    <h4 class="text-xl font-semibold mb-4">精简指令集计算机<br><span class="text-sm font-normal opacity-80">Reduced Instruction Set Computer</span></h4>
+                    <p class="mb-4">RISC架构强调简单高效的指令执行，每条指令只执行一个简单操作，通过流水线技术提高执行效率。</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>指令数量少且简单</li>
+                        <li>固定长度指令格式</li>
+                        <li>简单的寻址模式</li>
+                        <li>大量通用寄存器</li>
+                        <li>强调指令流水线处理</li>
+                    </ul>
+                    <p>代表架构：ARM, MIPS, RISC-V, PowerPC</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-8 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">主要ISA比较</h3>
+                    <div id="isa-comparison-chart" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-4 appear bento-cell bg-gray-100 p-10">
+                    <h3 class="text-2xl font-bold mb-6">CISC vs RISC 代码示例</h3>
+                    <div class="highlight-code mb-4">
+                        <h4 class="text-sm font-semibold mb-2">CISC (x86) 示例:</h4>
+                        <pre><code class="language-asm">; 将两个内存值相加并存储
+mov eax, [addr1]   ; 加载第一个值
+add eax, [addr2]   ; 与第二个值相加
+mov [result], eax  ; 存储结果</code></pre>
+                    </div>
+                    <div class="highlight-code">
+                        <h4 class="text-sm font-semibold mb-2">RISC (MIPS) 示例:</h4>
+                        <pre><code class="language-asm">; 将两个内存值相加并存储
+lw $t0, addr1      # 加载第一个值到寄存器
+lw $t1, addr2      # 加载第二个值到寄存器
+add $t2, $t0, $t1  # 寄存器间相加
+sw $t2, result     # 存储结果到内存</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Processor Microarchitecture -->
+    <section id="microarchitecture" class="py-20 md:py-32">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-bold mb-16 text-center section-title">处理器<span class="gradient-text">微架构</span></h2>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">微架构概述</h3>
+                    <p class="text-lg mb-6">处理器微架构（Microarchitecture）是指处理器内部的具体实现方式，它决定了ISA指令如何在硬件层面上被执行。微架构设计关注的是如何优化指令执行、提高性能、降低功耗等。</p>
+                    <p class="text-lg">相同的ISA可以有多种不同的微架构实现，如Intel和AMD都实现了x86 ISA，但采用了不同的微架构设计。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-8 appear bento-cell bg-gray-50 p-10">
+                    <h3 class="text-2xl font-bold mb-6">流水线技术</h3>
+                    <p class="text-lg mb-6">指令流水线（Pipeline）是一种并行处理技术，将指令执行过程分解为多个阶段，每个阶段同时处理不同指令，从而提高处理器的吞吐量。</p>
+                    <p class="text-lg mb-6">典型的五级流水线包括：</p>
+                    <ol class="list-decimal pl-5 space-y-2 mb-6">
+                        <li>取指令（Fetch）：从内存中获取指令</li>
+                        <li>译码（Decode）：解析指令，确定操作类型和操作数</li>
+                        <li>执行（Execute）：执行算术或逻辑运算</li>
+                        <li>访存（Memory）：如需要，访问数据内存</li>
+                        <li>写回（Write-back）：将结果写回寄存器或内存</li>
+                    </ol>
+                    <p class="text-lg">流水线执行可能面临的问题包括数据相关（Data Hazards）、控制相关（Control Hazards）和结构相关（Structural Hazards）。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-4 appear bento-cell accent-gradient p-8 text-white">
+                    <div id="pipeline-diagram" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">超标量处理器</h3>
+                    <p class="text-lg mb-6">超标量处理器（Superscalar Processor）能够在单一时钟周期内执行多条指令，通过增加多个执行单元来实现并行执行。</p>
+                    <p class="text-lg mb-6">主要特性：</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>多条指令并行执行</li>
+                        <li>动态调度（乱序执行）</li>
+                        <li>寄存器重命名</li>
+                        <li>推测执行</li>
+                    </ul>
+                    <p class="text-lg">现代处理器如Intel Core系列、AMD Ryzen系列都采用超标量设计。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">分支预测</h3>
+                    <p class="text-lg mb-6">分支预测（Branch Prediction）是处理器为了减少分支指令（如if-else、循环）对流水线效率影响而采用的技术。</p>
+                    <p class="text-lg mb-6">分支预测器类型：</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>静态预测：简单假设分支总是或不是跳转</li>
+                        <li>动态预测：根据过去执行历史预测</li>
+                        <ul class="list-circle pl-5 mt-2">
+                            <li>一位预测器</li>
+                            <li>两位预测器</li>
+                            <li>关联预测器</li>
+                            <li>神经网络预测器</li>
+                        </ul>
+                    </ul>
+                    <div class="text-sm bg-gray-100 p-3 rounded">
+                        <strong>性能影响：</strong> 分支预测错误会导致流水线清空，造成显著的性能损失，现代处理器的分支预测准确率通常在90%以上。
+                    </div>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell primary-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-6">处理器设计趋势</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">超长指令字</h4>
+                            <p>VLIW（Very Long Instruction Word）架构将多个操作打包到一条超长指令中，依赖编译器静态调度实现指令级并行。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">多核处理器</h4>
+                            <p>在单芯片上集成多个处理核心，通过线程级并行提高性能，同时为每个核心提供独立的执行资源。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">片上多处理器</h4>
+                            <p>SoC（System on Chip）设计将CPU、GPU、内存控制器等多个组件集成在单一芯片上，提高能效和性能。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Memory Architecture -->
+    <section id="memory" class="py-20 md:py-32 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-bold mb-16 text-center section-title">存储体系<span class="gradient-text">结构</span></h2>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 md:col-span-8 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">存储层次结构</h3>
+                    <p class="text-lg mb-6">计算机存储体系采用层次化结构，从快速但容量小的寄存器和缓存，到慢速但容量大的主存和辅存。</p>
+                    <p class="text-lg mb-6">存储层次的主要目标是平衡速度、容量和成本，利用程序的局部性原理实现高效数据访问。</p>
+                    <p class="text-lg">局部性原理包括：</p>
+                    <ul class="list-disc pl-5 space-y-2">
+                        <li>时间局部性：最近访问的数据很可能不久后再次被访问</li>
+                        <li>空间局部性：访问某个位置附近的数据的概率较高</li>
+                    </ul>
+                </div>
+                
+                <div class="col-span-12 md:col-span-4 appear bento-cell secondary-gradient p-8 text-white">
+                    <div id="memory-hierarchy" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">缓存工作原理</h3>
+                    <p class="text-lg mb-6">缓存（Cache）是位于CPU和主内存之间的小容量、高速内存，用于存储频繁访问的数据，减少对主内存的访问次数。</p>
+                    <p class="text-lg mb-4">缓存组织方式：</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>直接映射缓存：每个主内存块只能映射到特定的缓存行</li>
+                        <li>全相联缓存：主内存块可映射到任意缓存行</li>
+                        <li>组相联缓存：主内存块可映射到特定组内的任意缓存行</li>
+                    </ul>
+                    <p class="text-lg">替换策略决定了当缓存满时应该替换哪个块，常见的有：LRU（最近最少使用）、FIFO（先进先出）、随机替换等。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">虚拟内存</h3>
+                    <p class="text-lg mb-6">虚拟内存是一种内存管理技术，它为程序提供一个连续的虚拟地址空间，将物理内存和磁盘存储作为后备。</p>
+                    <p class="text-lg mb-4">虚拟内存的主要功能：</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>地址空间隔离，保护不同进程间的内存访问</li>
+                        <li>透明地扩展物理内存容量</li>
+                        <li>简化内存分配和程序加载</li>
+                    </ul>
+                    <div class="bg-gray-100 p-4 rounded-lg">
+                        <h4 class="font-semibold mb-2">页表和地址转换</h4>
+                        <p class="text-sm">虚拟地址到物理地址的转换通过页表（Page Table）完成，页表条目存储了虚拟页和物理页帧之间的映射关系。为加速转换过程，现代处理器使用TLB（Translation Lookaside Buffer）缓存最近的地址转换结果。</p>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell accent-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-6">存储技术创新</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">非易失性内存</h4>
+                            <p>NVM（Non-Volatile Memory）技术结合了DRAM的速度和闪存的持久性，如Intel的Optane技术，改变了内存层次结构。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">3D堆叠内存</h4>
+                            <p>通过垂直堆叠内存芯片，如HBM（High Bandwidth Memory），提供高带宽、低延迟的内存访问。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">缓存一致性协议</h4>
+                            <p>在多核系统中，MESI、MOESI等协议确保各核心缓存数据的一致性，支持并行计算。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">软件优化</h4>
+                            <p>缓存感知算法、预取技术、内存屏障等软件技术与硬件协同工作，优化内存性能。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-7 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">存储性能计算</h3>
+                    <div class="math-block">
+                        <p class="mb-4">平均内存访问时间（AMAT）计算公式：</p>
+                        <div id="amat-formula" class="mb-6">
+                            AMAT = Hit Time + Miss Rate × Miss Penalty
+                        </div>
+                        <p class="mb-4">缓存命中率（Hit Rate）与系统性能的关系：</p>
+                        <div id="hit-rate-formula">
+                            Performance improvement = 1 / (1 - Hit Rate × (1 - Memory latency / Cache latency))
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-5 appear bento-cell bg-gray-50 p-8">
+                    <div id="memory-performance-chart" class="w-full h-80"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Parallel Computing Architecture -->
+    <section id="parallel" class="py-20 md:py-32">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-bold mb-16 text-center section-title">并行计算<span class="gradient-text">架构</span></h2>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">并行计算概述</h3>
+                    <p class="text-lg mb-6">并行计算架构通过同时执行多个计算操作来提高系统性能。随着单核性能提升面临物理极限，并行计算已成为提升计算能力的主要途径。</p>
+                    <p class="text-lg">并行计算可在不同层次上实现：指令级并行、线程级并行、数据级并行、任务级并行。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-8 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">Flynn分类法</h3>
+                    <p class="text-lg mb-6">Flynn分类法是将计算机系统按照指令流和数据流的数量分类的方法：</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">SISD (Single Instruction Single Data)</h4>
+                            <p>传统的单处理器计算机，一个指令流处理一个数据流。</p>
+                            <p class="text-xs text-gray-500 mt-2">例：早期的个人电脑</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">SIMD (Single Instruction Multiple Data)</h4>
+                            <p>单个指令同时对多个数据元素执行相同操作。</p>
+                            <p class="text-xs text-gray-500 mt-2">例：向量处理器、GPU、SSE/AVX指令</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">MISD (Multiple Instruction Single Data)</h4>
+                            <p>多个指令同时对同一数据执行不同操作。</p>
+                            <p class="text-xs text-gray-500 mt-2">例：容错系统中的冗余处理</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">MIMD (Multiple Instruction Multiple Data)</h4>
+                            <p>多个处理单元同时执行不同指令处理不同数据。</p>
+                            <p class="text-xs text-gray-500 mt-2">例：多核处理器、分布式系统</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-4 appear bento-cell primary-gradient p-8 text-white">
+                    <div id="flynn-taxonomy" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">多处理器架构</h3>
+                    <p class="text-lg mb-6">多处理器系统可按内存访问方式分类：</p>
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">共享内存多处理器 (SMP)</h4>
+                            <p>所有处理器共享同一物理内存空间，通过内存共享数据。</p>
+                            <p class="text-xs mb-2">优点：简化编程模型，易于数据共享</p>
+                            <p class="text-xs">缺点：扩展性受限，内存访问争用</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">分布式内存系统</h4>
+                            <p>每个处理器有自己的本地内存，通过消息传递通信。</p>
+                            <p class="text-xs mb-2">优点：良好的扩展性，避免内存争用</p>
+                            <p class="text-xs">缺点：复杂的编程模型，通信开销</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">非均匀内存访问 (NUMA)</h4>
+                            <p>共享内存系统，但访问不同内存区域的延迟不同。</p>
+                            <p class="text-xs mb-2">优点：结合SMP和分布式系统的优势</p>
+                            <p class="text-xs">缺点：性能依赖于内存局部性，调度复杂</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">SIMD与GPU架构</h3>
+                    <p class="text-lg mb-6">SIMD（单指令多数据）架构是并行计算的重要形式，特别适用于数据密集型应用。</p>
+                    <p class="text-lg mb-6">现代处理器中的SIMD实现：</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>Intel: MMX, SSE, AVX, AVX-512</li>
+                        <li>ARM: NEON, SVE</li>
+                        <li>IBM: AltiVec</li>
+                    </ul>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                        <h4 class="font-semibold mb-2">GPU架构</h4>
+                        <p>图形处理器（GPU）是大规模SIMD架构的典型代表，包含数百至数千个简单的处理单元，适合高度并行的数据处理任务。</p>
+                        <p class="text-sm mt-2">GPU编程模型例如CUDA（NVIDIA）和OpenCL使开发者能够利用GPU进行通用计算（GPGPU）。</p>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell secondary-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-6">并行编程挑战</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">负载平衡</h4>
+                            <p>确保所有处理单元都得到充分利用，避免某些单元过载而其他单元空闲。策略包括静态分配、动态调度和任务窃取。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">数据依赖与同步</h4>
+                            <p>处理并行任务间的数据依赖关系，确保正确性。同步机制包括锁、信号量、屏障和原子操作，但过度同步会导致性能瓶颈。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">通信开销</h4>
+                            <p>并行任务间的通信可能成为性能瓶颈。算法设计应最小化通信需求，利用局部性原理，并在可能的情况下使用异步通信。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- I/O Systems -->
+    <section id="io-systems" class="py-20 md:py-32 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-bold mb-16 text-center section-title">输入输出<span class="gradient-text">系统</span></h2>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">I/O系统基本结构</h3>
+                    <p class="text-lg mb-6">输入/输出（I/O）系统负责计算机与外部世界的数据交换，包括用户接口设备、存储设备和网络设备等。</p>
+                    <p class="text-lg">I/O系统的设计直接影响计算机系统的整体性能、可靠性和扩展性。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-7 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">中断与DMA</h3>
+                    <p class="text-lg mb-6">处理器与I/O设备之间的通信主要通过以下机制：</p>
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">中断驱动I/O</h4>
+                            <p class="mb-2">中断是设备通知CPU数据传输完成或需要服务的机制。</p>
+                            <p class="text-sm">工作流程：</p>
+                            <ol class="list-decimal text-sm pl-5 space-y-1">
+                                <li>CPU初始化I/O请求并继续执行其他指令</li>
+                                <li>设备完成操作后发送中断信号</li>
+                                <li>CPU暂停当前执行，保存状态</li>
+                                <li>执行中断服务例程（ISR）</li>
+                                <li>完成处理后返回原程序</li>
+                            </ol>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">直接内存访问 (DMA)</h4>
+                            <p class="mb-2">DMA允许I/O设备直接访问系统内存，无需CPU干预每次数据传输。</p>
+                            <p class="text-sm">优势：</p>
+                            <ul class="list-disc text-sm pl-5 space-y-1">
+                                <li>减少CPU开销</li>
+                                <li>提高数据传输效率</li>
+                                <li>允许CPU与I/O操作并行执行</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-5 appear bento-cell accent-gradient p-8 text-white">
+                    <div id="io-mechanism" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">总线系统</h3>
+                    <p class="text-lg mb-6">总线是连接计算机各组件的通信通道，传输地址、数据和控制信号。</p>
+                    <p class="text-lg mb-4">总线类型：</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>系统总线：连接CPU、内存和其他核心组件</li>
+                        <li>扩展总线：连接外围设备（如PCIe、USB）</li>
+                        <li>内存总线：专用于CPU和内存之间的高速数据传输</li>
+                    </ul>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="font-semibold mb-2">现代总线技术</h4>
+                        <ul class="list-disc text-sm pl-5 space-y-1">
+                            <li>PCIe (Peripheral Component Interconnect Express)：点对点高速串行总线</li>
+                            <li>NVMe (Non-Volatile Memory Express)：为闪存设备优化的高性能接口</li>
+                            <li>USB (Universal Serial Bus)：通用外部设备连接标准</li>
+                            <li>Thunderbolt：结合PCIe和DisplayPort的高速接口</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">I/O性能优化</h3>
+                    <p class="text-lg mb-6">I/O操作通常比处理器和内存操作慢几个数量级，因此I/O性能优化对系统整体性能至关重要。</p>
+                    <p class="text-lg mb-4">常见优化策略：</p>
+                    <ul class="list-disc pl-5 space-y-2 mb-6">
+                        <li>I/O缓冲：减少设备访问次数</li>
+                        <li>预读/预取：提前读取可能需要的数据</li>
+                        <li>合并写入：将多个小写入合并为大写入</li>
+                        <li>异步I/O：允许处理继续而无需等待I/O完成</li>
+                        <li>RAID技术：提高存储系统的性能和可靠性</li>
+                        <li>I/O调度：优化请求顺序减少寻道时间</li>
+                    </ul>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="font-semibold mb-2">零拷贝技术</h4>
+                        <p class="text-sm">通过避免数据在内核空间和用户空间之间的多次复制，显著提高数据传输效率，特别适用于网络服务器和文件系统。</p>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell primary-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-6">现代I/O趋势</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">存储级内存</h4>
+                            <p>新型非易失性存储技术（如3D XPoint）模糊了内存和存储之间的界限，推动了持久性内存架构的发展。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">计算存储</h4>
+                            <p>在存储设备中集成处理能力，实现数据就地处理，减少数据传输，提高能效和性能。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">专用加速器</h4>
+                            <p>针对特定I/O密集型任务（如网络处理、存储控制）的硬件加速器，减轻CPU负担，提高吞吐量。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">光互连</h4>
+                            <p>光学互连技术在芯片间、板级和机架级通信中的应用，提供更高带宽、更低延迟和更低功耗的数据传输。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Modern Architecture Trends -->
+    <section id="trends" class="py-20 md:py-32">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-bold mb-16 text-center section-title">现代计算机架构<span class="gradient-text">发展趋势</span></h2>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">架构发展概述</h3>
+                    <p class="text-lg mb-6">随着摩尔定律放缓和物理限制的出现，计算机架构正经历从通用计算向专用、异构和新型计算模式的转变。</p>
+                    <p class="text-lg">这些新兴趋势旨在在能耗限制下继续提高计算性能，并适应人工智能、大数据等新兴应用的需求。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell secondary-gradient p-10 text-white">
+                    <h3 class="text-2xl font-bold mb-6">异构计算</h3>
+                    <p class="text-lg mb-6">异构计算系统结合了不同类型的处理器和加速器，以优化特定类型工作负载的性能和能效。</p>
+                    <div class="space-y-4">
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">CPU + GPU</h4>
+                            <p>结合通用处理器与图形处理器，适用于混合工作负载和图形/并行计算。</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">CPU + FPGA</h4>
+                            <p>可重构硬件加速特定算法，提供灵活性和能效。应用于数据中心、网络处理和实时系统。</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">大小核设计</h4>
+                            <p>结合高性能和高能效核心（如ARM big.LITTLE、Intel Hybrid Technology），优化性能与功耗平衡。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">专用集成电路</h3>
+                    <p class="text-lg mb-6">随着通用处理器性能提升放缓，专用于特定任务的硬件加速器变得更加重要。</p>
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">AI加速器</h4>
+                            <p>针对深度学习工作负载优化的处理器，如TPU（张量处理单元）、NPU（神经网络处理单元）。这些加速器提供高吞吐量的矩阵和向量运算，显著提升AI训练和推理性能。</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">领域特定架构 (DSA)</h4>
+                            <p>为特定应用领域定制的处理器架构，如视频编解码、加密、数据库操作等。通过专门化实现比通用处理器更高的性能和能效。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-5 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">量子计算</h3>
+                    <p class="text-lg mb-6">量子计算利用量子力学原理（叠加和纠缠）进行计算，有潜力解决经典计算机难以解决的问题。</p>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                        <h4 class="font-semibold mb-2">量子位（Qubit）</h4>
+                        <p>量子计算的基本单位，不同于经典的比特，量子位可以同时处于多个状态。</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                        <h4 class="font-semibold mb-2">量子算法</h4>
+                        <p>专为量子计算机设计的算法，如Shor算法（质因数分解）和Grover算法（非结构化搜索），可以比经典算法更快解决特定问题。</p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <h4 class="font-semibold mb-2">当前挑战</h4>
+                        <p>量子退相干、错误校正、量子位稳定性和扩展性是量子计算面临的主要技术挑战。</p>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-7 appear bento-cell accent-gradient p-8 text-white">
+                    <h3 class="text-3xl font-bold mb-6">可重构计算架构</h3>
+                    <p class="text-lg mb-6">可重构计算允许硬件根据应用需求动态调整其功能和互连结构。</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">FPGA技术</h4>
+                            <p>现场可编程门阵列（FPGA）允许硬件功能在部署后更改，实现软件灵活性和硬件性能的结合。</p>
+                            <p class="text-sm mt-2">应用领域：加速器、原型设计、实时系统、网络设备</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">粗粒度可重构架构 (CGRA)</h4>
+                            <p>介于FPGA和处理器之间的架构，使用功能块而非逻辑门作为重构单位，提供更高级别的抽象和更高效的重构。</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">可重构互连</h4>
+                            <p>动态可调整的处理单元间通信网络，根据应用需求优化数据流，提高性能并减少功耗。</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">自适应计算</h4>
+                            <p>系统能够根据工作负载、性能要求和能源预算自动调整其硬件配置，实现智能资源管理。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell primary-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-6">未来展望</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">后摩尔时代计算</h4>
+                            <p>随着传统缩放面临物理极限，新材料、3D堆叠、光电集成和新型计算范式成为研究热点，寻求突破性能屏障的新途径。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">神经形态计算</h4>
+                            <p>模仿人脑结构和功能的计算架构，使用人工神经元和突触实现高效的模式识别和认知任务，具有低功耗和自适应学习的特点。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">边缘计算架构</h4>
+                            <p>针对物联网和分布式系统优化的架构，将计算能力部署在数据源附近，减少延迟，提高隐私保护，并减轻中心云负担。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Performance Evaluation -->
+    <section id="performance" class="py-20 md:py-32 bg-gray-50">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-bold mb-16 text-center section-title">性能评估<span class="gradient-text">与优化</span></h2>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 md:col-span-8 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">性能指标</h3>
+                    <p class="text-lg mb-6">计算机系统性能评估需要各种指标来全面衡量不同方面的性能：</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">执行时间</h4>
+                            <p>完成特定任务所需的时间，通常用秒或毫秒表示。</p>
+                            <p class="text-sm mt-2">执行时间 = 指令数 × 每指令周期数 × 时钟周期时间</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">吞吐量</h4>
+                            <p>单位时间内完成的任务或处理的数据量，衡量系统的处理能力。</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">MIPS和FLOPS</h4>
+                            <p>每秒执行的百万条指令数（MIPS）和每秒执行的浮点运算数（FLOPS），衡量处理器的计算能力。</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">响应时间和延迟</h4>
+                            <p>请求发起到收到响应的时间，衡量系统的实时性能。</p>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <h4 class="font-semibold mb-2">基准测试</h4>
+                        <p class="text-lg">标准化的性能测试套件，用于比较不同系统的性能，如SPEC CPU、PARSEC、TPC等。</p>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-4 appear bento-cell bg-gray-50 p-6">
+                    <div id="performance-metrics" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell bg-white p-10">
+                    <h3 class="text-2xl font-bold mb-6">Amdahl定律</h3>
+                    <p class="text-lg mb-6">Amdahl定律描述了程序中并行部分的加速对整体速度的影响，是评估并行系统潜在性能提升的关键公式。</p>
+                    <div class="math-block mb-6">
+                        <div id="amdahl-law" class="mb-4">
+                            Speedup = 1 / ((1 - P) + P/N)
+                        </div>
+                        <p class="text-sm">其中：</p>
+                        <ul class="text-sm list-disc pl-5 space-y-1">
+                            <li>P是可并行化的代码比例（0~1）</li>
+                            <li>N是处理核心数量</li>
+                            <li>(1-P)是串行部分比例</li>
+                        </ul>
+                    </div>
+                    <p class="text-lg">Amdahl定律表明，即使无限增加处理器数量，程序的最大加速比也受限于其串行部分。</p>
+                    <div class="bg-gray-50 p-4 rounded-lg mt-4">
+                        <h4 class="font-semibold mb-2">示例</h4>
+                        <p class="text-sm">如果程序的95%可以并行化，而5%必须串行执行，则即使使用无限多的处理器，最大加速比也只能是20倍。</p>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6 appear bento-cell secondary-gradient p-8 text-white">
+                    <div id="amdahl-chart" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">性能优化策略</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">指令级优化</h4>
+                            <ul class="list-disc pl-5 space-y-2">
+                                <li>流水线设计优化</li>
+                                <li>指令调度与重排序</li>
+                                <li>分支预测改进</li>
+                                <li>SIMD指令扩展利用</li>
+                                <li>循环展开和软件流水</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">存储系统优化</h4>
+                            <ul class="list-disc pl-5 space-y-2">
+                                <li>缓存层次结构优化</li>
+                                <li>数据预取技术</li>
+                                <li>存储器访问模式优化</li>
+                                <li>非阻塞缓存设计</li>
+                                <li>NUMA感知内存分配</li>
+                                <li>压缩和精简数据结构</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">系统级优化</h4>
+                            <ul class="list-disc pl-5 space-y-2">
+                                <li>负载平衡和任务调度</li>
+                                <li>能源管理和动态电压频率调节</li>
+                                <li>异构架构资源分配</li>
+                                <li>热管理和散热优化</li>
+                                <li>编译器和自动化优化</li>
+                                <li>硬件加速器利用</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 p-6 rounded-lg mt-8">
+                        <h4 class="font-semibold mb-4">性能调优示例代码：局部性优化</h4>
+                        <div class="highlight-code">
+                            <pre><code class="language-c">// 原始矩阵乘法代码 - 缓存不友好
+for (i = 0; i < N; i++)
+    for (j = 0; j < N; j++)
+        for (k = 0; k < N; k++)
+            C[i][j] += A[i][k] * B[k][j];
+
+// 优化后的矩阵乘法代码 - 提高缓存命中率
+for (i = 0; i < N; i++)
+    for (k = 0; k < N; k++)
+        for (j = 0; j < N; j++)
+            C[i][j] += A[i][k] * B[k][j];</code></pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell accent-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-6">性能工程实践</h3>
+                    <p class="text-lg mb-8">系统性能优化是一个复杂的过程，需要综合考虑多方面因素，并采用科学的方法论。</p>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">1. 性能分析</h4>
+                            <p>使用性能分析工具（如perf、VTune、gprof）识别瓶颈，收集运行时数据，了解系统行为和资源使用情况。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">2. 工作负载特征分析</h4>
+                            <p>分析应用程序的行为模式、访存特性、计算密度和并行潜力，为针对性优化提供依据。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">3. 实施优化</h4>
+                            <p>根据分析结果实施针对性优化，包括算法改进、代码重构、编译选项调整和硬件利用等多个层面。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-2">4. 评估与迭代</h4>
+                            <p>测量优化效果，验证目标达成情况，分析潜在副作用，并进行持续改进和fine-tuning。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Summary -->
+    <section id="summary" class="py-20 md:py-32">
+        <div class="container mx-auto px-6">
+            <h2 class="text-4xl md:text-5xl font-bold mb-16 text-center section-title">总结<span class="gradient-text">与展望</span></h2>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">计算机体系架构的发展历程</h3>
+                    <p class="text-lg mb-6">从早期的冯·诺依曼架构到现代的异构计算和量子计算，计算机体系架构经历了几十年的革命性变化。</p>
+                    <p class="text-lg">每一代架构创新都推动了计算能力的提升，使计算机能够应对越来越复杂的应用场景和工作负载。</p>
+                </div>
+                
+                <div class="col-span-12 md:col-span-7 appear bento-cell primary-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-8">核心原则与设计权衡</h3>
+                    <p class="text-lg mb-6">计算机体系架构设计始终围绕几个核心权衡因素：</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">性能与功耗</h4>
+                            <p>随着移动和云计算的兴起，能效成为与原始性能同样重要的设计目标。</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">通用性与专用性</h4>
+                            <p>通用处理器提供灵活性，而专用设计提供更高效率，现代系统越来越倾向于结合两者。</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">复杂性与可扩展性</h4>
+                            <p>架构复杂性提高了短期性能，但可能限制长期可扩展性和适应性。</p>
+                        </div>
+                        <div class="bg-white bg-opacity-10 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2">硬件与软件协同</h4>
+                            <p>现代系统设计强调硬件架构与软件优化的协同设计，实现整体系统最优。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-5 appear bento-cell bg-white p-10">
+                    <div id="architecture-evolution" class="w-full h-80"></div>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell secondary-gradient p-10 text-white">
+                    <h3 class="text-3xl font-bold mb-8">未来发展方向</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">计算范式转变</h4>
+                            <p>从传统冯·诺依曼计算向数据中心计算、边缘计算、神经形态计算等多样化计算模式转变，适应不同应用场景的需求。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">软硬件边界模糊</h4>
+                            <p>软件定义硬件、硬件可编程性增强、编译器与硬件协同优化等趋势，使软硬件界限逐渐模糊，实现更灵活高效的系统。</p>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">智能自适应系统</h4>
+                            <p>未来计算机系统将更具自适应性，能根据工作负载、资源可用性和性能目标自动调整架构配置，优化资源利用。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 appear bento-cell bg-white p-10">
+                    <h3 class="text-3xl font-bold mb-8">计算机架构与人类进步</h3>
+                    <p class="text-lg mb-6">计算机架构的进步不仅是技术的演进，更是人类社会发展的重要推动力。从科学计算、企业管理到社交媒体、人工智能，计算机架构的每一次突破都带来了应用领域的革命性变化。</p>
+                    <p class="text-lg mb-6">随着计算需求的多样化和复杂化，计算机体系架构将继续适应新的挑战，探索新的设计思路和技术路径。在摩尔定律减缓的后摩尔时代，架构创新将比以往任何时候都更加重要。</p>
+                    <p class="text-lg">无论未来计算机形态如何演变，对性能、效率、可靠性和安全性的追求将始终是计算机体系架构发展的核心驱动力。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Footer -->
+    <footer class="py-12 bg-gray-900 text-white">
+        <div class="container mx-auto px-6">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-6 md:mb-0">
+                    <h2 class="text-2xl font-bold mb-2">计算机体系架构</h2>
+                    <p class="text-gray-400">从底层原理到未来趋势的全面探讨</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-400">© 2025 Computer Architecture Exploration</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    <script>
+        // Initialize charts and diagrams after DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Progress bar handling
+            function updateProgressBar() {
+                const scrollTop = window.scrollY;
+                const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+                const scrollPercent = (scrollTop / docHeight) * 100;
+                document.getElementById('progress-bar').style.width = scrollPercent + '%';
+            }
+            
+            window.addEventListener('scroll', updateProgressBar);
+            updateProgressBar();
+            
+            // Handle scroll animations
+            function handleScrollAnimations() {
+                const elements = document.querySelectorAll('.appear');
+                
+                elements.forEach(element => {
+                    const position = element.getBoundingClientRect();
+                    // If element is in viewport
+                    if(position.top < window.innerHeight * 0.9) {
+                        element.classList.add('visible');
+                    }
+                });
+            }
+            
+            window.addEventListener('scroll', handleScrollAnimations);
+            // Initial check for elements in viewport
+            setTimeout(handleScrollAnimations, 100);
+            
+            // Apply parallax effects
+            function handleParallax() {
+                const parallaxElements = document.querySelectorAll('.parallax-element');
+                
+                parallaxElements.forEach(element => {
+                    const position = element.parentElement.getBoundingClientRect();
+                    const scrollPosition = window.innerHeight - position.top;
+                    
+                    if(position.top < window.innerHeight && position.bottom > 0) {
+                        const speed = element.dataset.speed || 0.1;
+                        const yPos = (scrollPosition * speed);
+                        element.style.transform = `translateY(${yPos}px)`;
+                    }
+                });
+            }
+            
+            window.addEventListener('scroll', handleParallax);
+            
+            // Render KaTeX equations
+            renderMathInElement(document.getElementById('amat-formula'), {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ]
+            });
+            
+            renderMathInElement(document.getElementById('hit-rate-formula'), {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ]
+            });
+            
+            renderMathInElement(document.getElementById('amdahl-law'), {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ]
+            });
+            
+            // Initialize ECharts diagrams
+            initializeArchLayersChart();
+            initializeVonNeumannDiagram();
+            initializeHarvardDiagram();
+            initializeIsaComparisonChart();
+            initializePipelineDiagram();
+            initializeMemoryHierarchy();
+            initializeMemoryPerformanceChart();
+            initializeFlynn();
+            initializeIOMechanism();
+            initializePerformanceMetrics();
+            initializeAmdahlChart();
+            initializeArchitectureEvolution();
+            
+            // Highlight code blocks with Prism.js
+            Prism.highlightAll();
+        });
+        
+        // Chart initialization functions
+        function initializeArchLayersChart() {
+            const chart = echarts.init(document.getElementById('arch-layers-chart'));
+            const option = {
+                color: ['#0066FF', '#7000FF', '#FF0066'],
+                title: {
+                    text: '计算机体系架构层次',
+                    left: 'center',
+                    textStyle: {
+                        fontSize: 16,
+                        fontWeight: 'normal'
+                    }
+                },
+                tooltip: {
+                    trigger: 'item'
+                },
+                series: [
+                    {
+                        name: '架构层次',
+                        type: 'pie',
+                        radius: ['30%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 10,
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: true,
+                            formatter: '{b}: {c}'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: '18',
+                                fontWeight: 'bold'
+                            }
+                        },
+                        labelLine: {
+                            show: true
+                        },
+                        data: [
+                            { value: 1, name: '应用软件' },
+                            { value: 2, name: '操作系统' },
+                            { value: 3, name: '指令系统架构 (ISA)' },
+                            { value: 4, name: '微架构' },
+                            { value: 5, name: '逻辑设计' },
+                            { value: 6, name: '电路实现' }
+                        ]
+                    }
+                ]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializeVonNeumannDiagram() {
+            const chart = echarts.init(document.getElementById('von-neumann-diagram'));
+            const option = {
+                title: {
+                    text: '冯·诺依曼架构',
+                    left: 'center'
+                },
+                tooltip: {},
+                animationDurationUpdate: 1500,
+                animationEasingUpdate: 'quinticInOut',
+                series: [
+                    {
+                        type: 'graph',
+                        layout: 'none',
+                        symbolSize: 60,
+                        roam: false,
+                        label: {
+                            show: true
+                        },
+                        edgeSymbol: ['circle', 'arrow'],
+                        edgeSymbolSize: [4, 10],
+                        edgeLabel: {
+                            fontSize: 12
+                        },
+                        data: [
+                            {
+                                name: 'CPU',
+                                x: 300,
+                                y: 100,
+                                itemStyle: {
+                                    color: '#0066FF'
+                                }
+                            },
+                            {
+                                name: '内存',
+                                x: 300,
+                                y: 300,
+                                itemStyle: {
+                                    color: '#7000FF'
+                                }
+                            },
+                            {
+                                name: '输入设备',
+                                x: 100,
+                                y: 200,
+                                itemStyle: {
+                                    color: '#FF0066'
+                                }
+                            },
+                            {
+                                name: '输出设备',
+                                x: 500,
+                                y: 200,
+                                itemStyle: {
+                                    color: '#FF0066'
+                                }
+                            }
+                        ],
+                        links: [
+                            {
+                                source: 'CPU',
+                                target: '内存',
+                                label: {
+                                    show: true,
+                                    formatter: '指令/数据',
+                                    fontSize: 12
+                                }
+                            },
+                            {
+                                source: '输入设备',
+                                target: 'CPU'
+                            },
+                            {
+                                source: 'CPU',
+                                target: '输出设备'
+                            }
+                        ],
+                        lineStyle: {
+                            opacity: 0.9,
+                            width: 2,
+                            curveness: 0
+                        }
+                    }
+                ]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializeHarvardDiagram() {
+            const chart = echarts.init(document.getElementById('harvard-diagram'));
+            const option = {
+                title: {
+                    text: '哈佛架构',
+                    left: 'center'
+                },
+                tooltip: {},
+                animationDurationUpdate: 1500,
+                animationEasingUpdate: 'quinticInOut',
+                series: [
+                    {
+                        type: 'graph',
+                        layout: 'none',
+                        symbolSize: 60,
+                        roam: false,
+                        label: {
+                            show: true
+                        },
+                        edgeSymbol: ['circle', 'arrow'],
+                        edgeSymbolSize: [4, 10],
+                        edgeLabel: {
+                            fontSize: 12
+                        },
+                        data: [
+                            {
+                                name: 'CPU',
+                                x: 300,
+                                y: 100,
+                                itemStyle: {
+                                    color: '#0066FF'
+                                }
+                            },
+                            {
+                                name: '指令内存',
+                                x: 150,
+                                y: 300,
+                                itemStyle: {
+                                    color: '#7000FF'
+                                }
+                            },
+                            {
+                                name: '数据内存',
+                                x: 450,
+                                y: 300,
+                                itemStyle: {
+                                    color: '#7000FF'
+                                }
+                            },
+                            {
+                                name: 'I/O设备',
+                                x: 300,
+                                y: 200,
+                                itemStyle: {
+                                    color: '#FF0066'
+                                }
+                            }
+                        ],
+                        links: [
+                            {
+                                source: 'CPU',
+                                target: '指令内存',
+                                label: {
+                                    show: true,
+                                    formatter: '指令',
+                                    fontSize: 12
+                                }
+                            },
+                            {
+                                source: 'CPU',
+                                target: '数据内存',
+                                label: {
+                                    show: true,
+                                    formatter: '数据',
+                                    fontSize: 12
+                                }
+                            },
+                            {
+                                source: 'CPU',
+                                target: 'I/O设备'
+                            }
+                        ],
+                        lineStyle: {
+                            opacity: 0.9,
+                            width: 2,
+                            curveness: 0
+                        }
+                    }
+                ]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializeIsaComparisonChart() {
+            const chart = echarts.init(document.getElementById('isa-comparison-chart'));
+            const option = {
+                title: {
+                    text: '主要指令集架构市场份额',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c} ({d}%)'
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 10,
+                    top: 'center',
+                    data: ['x86-64', 'ARM', 'RISC-V', 'MIPS', 'PowerPC', '其他']
+                },
+                series: [
+                    {
+                        name: '市场份额',
+                        type: 'pie',
+                        radius: ['50%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 10,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: false,
+                            position: 'center'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: '18',
+                                fontWeight: 'bold'
+                            }
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: [
+                            { value: 65, name: 'x86-64' },
+                            { value: 28, name: 'ARM' },
+                            { value: 3, name: 'RISC-V' },
+                            { value: 1.5, name: 'MIPS' },
+                            { value: 1, name: 'PowerPC' },
+                            { value: 1.5, name: '其他' }
+                        ]
+                    }
+                ]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializePipelineDiagram() {
+            const chart = echarts.init(document.getElementById('pipeline-diagram'));
+            chart.setOption({
+                title: {
+                    text: '五级指令流水线',
+                    textStyle: {
+                        color: '#fff'
+                    }
+                },
+                grid: {
+                    left: '5%',
+                    right: '5%',
+                    top: '15%',
+                    bottom: '10%'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['周期1', '周期2', '周期3', '周期4', '周期5', '周期6', '周期7', '周期8'],
+                    axisLabel: {
+                        color: '#fff',
+                        fontSize: 10
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: 'rgba(255, 255, 255, 0.3)'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: ['指令1', '指令2', '指令3', '指令4', '指令5'],
+                    axisLabel: {
+                        color: '#fff',
+                        fontSize: 10
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: 'rgba(255, 255, 255, 0.3)'
+                        }
+                    }
+                },
+                visualMap: {
+                    show: false,
+                    min: 1,
+                    max: 5,
+                    inRange: {
+                        color: ['#FF9F7F', '#FFDB5C', '#8BF477', '#59D4FF', '#EA7CCC']
+                    }
+                },
+                series: [{
+                    type: 'heatmap',
+                    data: [
+                        // 指令1的5个阶段
+                        [0, 0, 1], [1, 0, 2], [2, 0, 3], [3, 0, 4], [4, 0, 5],
+                        // 指令2的5个阶段
+                        [1, 1, 1], [2, 1, 2], [3, 1, 3], [4, 1, 4], [5, 1, 5],
+                        // 指令3的5个阶段
+                        [2, 2, 1], [3, 2, 2], [4, 2, 3], [5, 2, 4], [6, 2, 5],
+                        // 指令4的5个阶段
+                        [3, 3, 1], [4, 3, 2], [5, 3, 3], [6, 3, 4], [7, 3, 5],
+                        // 指令5的前4个阶段
+                        [4, 4, 1], [5, 4, 2], [6, 4, 3], [7, 4, 4]
+                    ],
+                    label: {
+                        show: true,
+                        formatter: function(params) {
+                            const stages = ['F', 'D', 'E', 'M', 'W'];
+                            return stages[params.data[2]-1];
+                        },
+                        color: '#000',
+                        fontSize: 10
+                    },
+                    emphasis: {
+                        itemStyle: {
+                            borderColor: '#fff',
+                            borderWidth: 1
+                        }
+                    }
+                }]
+            });
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializeMemoryHierarchy() {
+            const chart = echarts.init(document.getElementById('memory-hierarchy'));
+            chart.setOption({
+                title: {
+                    text: '存储层次结构',
+                    textStyle: {
+                        color: '#fff'
+                    },
+                    left: 'center'
+                },
+                tooltip: {
+                    formatter: '{b}: {c}'
+                },
+                series: [
+                    {
+                        type: 'funnel',
+                        sort: 'none',
+                        left: '10%',
+                        top: '10%',
+                        bottom: '10%',
+                        width: '80%',
+                        minSize: '0%',
+                        maxSize: '100%',
+                        gap: 2,
+                        label: {
+                            show: true,
+                            position: 'inside',
+                            color: '#000',
+                            formatter: '{b}\n{c}'
+                        },
+                        labelLine: {
+                            length: 10,
+                            lineStyle: {
+                                width: 1,
+                                type: 'solid'
+                            }
+                        },
+                        itemStyle: {
+                            borderWidth: 0
+                        },
+                        emphasis: {
+                            label: {
+                                fontSize: 14
+                            }
+                        },
+                        data: [
+                            { value: '0.5-1ns', name: '寄存器' },
+                            { value: '1-3ns', name: 'L1缓存' },
+                            { value: '4-10ns', name: 'L2缓存' },
+                            { value: '10-30ns', name: 'L3缓存' },
+                            { value: '50-100ns', name: '主内存' },
+                            { value: '10-100μs', name: 'SSD' },
+                            { value: '1-10ms', name: '硬盘' }
+                        ]
+                    }
+                ]
+            });
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializeMemoryPerformanceChart() {
+            const chart = echarts.init(document.getElementById('memory-performance-chart'));
+            chart.setOption({
+                title: {
+                    text: '缓存大小与命中率关系',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: '{b}KB: {c}%'
+                },
+                xAxis: {
+                    type: 'category',
+                    name: '缓存大小 (KB)',
+                    data: ['8', '16', '32', '64', '128', '256', '512', '1024'],
+                    axisLabel: {
+                        fontSize: 10
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '命中率 (%)',
+                    min: 50,
+                    max: 100,
+                    axisLabel: {
+                        fontSize: 10
+                    }
+                },
+                series: [
+                    {
+                        name: '命中率',
+                        type: 'line',
+                        smooth: true,
+                        data: [68, 75, 82, 87, 91, 94, 96, 97],
+                        markPoint: {
+                            data: [
+                                { type: 'max', name: '最大值' }
+                            ]
+                        },
+                        lineStyle: {
+                            width: 3,
+                            color: '#7000FF'
+                        },
+                        itemStyle: {
+                            color: '#7000FF'
+                        },
+                        areaStyle: {
+                            color: {
+                                type: 'linear',
+                                x: 0,
+                                y: 0,
+                                x2: 0,
+                                y2: 1,
+                                colorStops: [{
+                                    offset: 0, color: 'rgba(112, 0, 255, 0.5)'
+                                }, {
+                                    offset: 1, color: 'rgba(112, 0, 255, 0.1)'
+                                }]
+                            }
+                        }
+                    }
+                ]
+            });
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializeFlynn() {
+            const chart = echarts.init(document.getElementById('flynn-taxonomy'));
+            chart.setOption({
+                title: {
+                    text: 'Flynn分类法',
+                    textStyle: {
+                        color: '#fff'
+                    },
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'item'
+                },
+                series: [
+                    {
+                        type: 'treemap',
+                        data: [
+                            {
+                                name: 'SISD',
+                                value: 25,
+                                children: [
+                                    { name: '单核CPU', value: 25 }
+                                ]
+                            },
+                            {
+                                name: 'SIMD',
+                                value: 30,
+                                children: [
+                                    { name: 'GPU', value: 15 },
+                                    { name: '向量处理器', value: 10 },
+                                    { name: 'AVX指令', value: 5 }
+                                ]
+                            },
+                            {
+                                name: 'MISD',
+                                value: 15,
+                                children: [
+                                    { name: '故障容错系统', value: 10 },
+                                    { name: '流水线处理', value: 5 }
+                                ]
+                            },
+                            {
+                                name: 'MIMD',
+                                value: 30,
+                                children: [
+                                    { name: '多核CPU', value: 10 },
+                                    { name: '分布式系统', value: 10 },
+                                    { name: '集群计算', value: 10 }
+                                ]
+                            }
+                        ],
+                        label: {
+                            position: 'inside',
+                            formatter: '{b}'
+                        }
+                    }
+                ]
+            });
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializeIOMechanism() {
+            const chart = echarts.init(document.getElementById('io-mechanism'));
+            chart.setOption({
+                title: {
+                    text: 'I/O处理机制',
+                    textStyle: {
+                        color: '#fff'
+                    },
+                    left: 'center'
+                },
+                tooltip: {
+                    formatter: '{b}: {c}'
+                },
+                series: [
+                    {
+                        type: 'graph',
+                        layout: 'force',
+                        draggable: false,
+                        roam: false,
+                        focusNodeAdjacency: true,
+                        symbolSize: 50,
+                        label: {
+                            show: true,
+                            color: '#000'
+                        },
+                        edgeLabel: {
+                            show: true,
+                            formatter: '{c}',
+                            fontSize: 10,
+                            color: '#fff'
+                        },
+                        force: {
+                            repulsion: 300,
+                            edgeLength: 120
+                        },
+                        lineStyle: {
+                            color: '#fff',
+                            width: 2,
+                            curveness: 0.3
+                        },
+                        categories: [
+                            { name: '处理器' },
+                            { name: '存储器' },
+                            { name: '设备' }
+                        ],
+                        data: [
+                            {
+                                name: 'CPU',
+                                category: 0,
+                                itemStyle: {
+                                    color: '#FF0066'
+                                }
+                            },
+                            {
+                                name: '内存',
+                                category: 1,
+                                itemStyle: {
+                                    color: '#7000FF'
+                                }
+                            },
+                            {
+                                name: 'DMA控制器',
+                                category: 0,
+                                itemStyle: {
+                                    color: '#0066FF'
+                                }
+                            },
+                            {
+                                name: 'I/O设备',
+                                category: 2,
+                                itemStyle: {
+                                    color: '#00CC99'
+                                }
+                            }
+                        ],
+                        links: [
+                            {
+                                source: 'CPU',
+                                target: '内存',
+                                value: '读写数据'
+                            },
+                            {
+                                source: 'CPU',
+                                target: 'I/O设备',
+                                value: '指令/中断'
+                            },
+                            {
+                                source: 'DMA控制器',
+                                target: '内存',
+                                value: '直接访问'
+                            },
+                            {
+                                source: 'DMA控制器',
+                                target: 'I/O设备',
+                                value: '数据传输'
+                            },
+                            {
+                                source: 'CPU',
+                                target: 'DMA控制器',
+                                value: '初始化'
+                            }
+                        ]
+                    }
+                ]
+            });
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializePerformanceMetrics() {
+            const chart = echarts.init(document.getElementById('performance-metrics'));
+            chart.setOption({
+                title: {
+                    text: '处理器性能指标对比',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                legend: {
+                    data: ['CPU A', 'CPU B', 'CPU C'],
+                    top: 30
+                },
+                radar: {
+                    indicator: [
+                        { name: '单线程性能', max: 10 },
+                        { name: '多线程性能', max: 10 },
+                        { name: '能效比', max: 10 },
+                        { name: 'FLOPS', max: 10 },
+                        { name: '内存带宽', max: 10 },
+                        { name: '缓存效率', max: 10 }
+                    ]
+                },
+                series: [
+                    {
+                        type: 'radar',
+                        data: [
+                            {
+                                value: [9, 7, 6, 8, 7, 8],
+                                name: 'CPU A',
+                                areaStyle: {
+                                    opacity: 0.3
+                                },
+                                lineStyle: {
+                                    width: 2
+                                }
+                            },
+                            {
+                                value: [7, 9, 8, 7, 8, 7],
+                                name: 'CPU B',
+                                areaStyle: {
+                                    opacity: 0.3
+                                },
+                                lineStyle: {
+                                    width: 2
+                                }
+                            },
+                            {
+                                value: [6, 6, 9, 9, 9, 6],
+                                name: 'CPU C',
+                                areaStyle: {
+                                    opacity: 0.3
+                                },
+                                lineStyle: {
+                                    width: 2
+                                }
+                            }
+                        ]
+                    }
+                ]
+            });
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializeAmdahlChart() {
+            const chart = echarts.init(document.getElementById('amdahl-chart'));
+            chart.setOption({
+                title: {
+                    text: 'Amdahl定律：可并行化程度对加速比的影响',
+                    textStyle: {
+                        color: '#fff'
+                    },
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['95%可并行', '90%可并行', '75%可并行', '50%可并行'],
+                    top: 30,
+                    textStyle: {
+                        color: '#fff'
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    name: '处理器数量',
+                    data: [1, 2, 4, 8, 16, 32, 64, 128, 256],
+                    axisLabel: {
+                        color: '#fff',
+                        fontSize: 10
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: 'rgba(255, 255, 255, 0.3)'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '加速比',
+                    axisLabel: {
+                        color: '#fff',
+                        fontSize: 10
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: 'rgba(255, 255, 255, 0.3)'
+                        }
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: '95%可并行',
+                        type: 'line',
+                        data: [1, 1.90, 3.48, 5.93, 8.98, 11.85, 13.79, 15.06, 15.78],
+                        smooth: true
+                    },
+                    {
+                        name: '90%可并行',
+                        type: 'line',
+                        data: [1, 1.82, 3.08, 4.71, 6.40, 7.80, 8.68, 9.20, 9.48],
+                        smooth: true
+                    },
+                    {
+                        name: '75%可并行',
+                        type: 'line',
+                        data: [1, 1.60, 2.29, 2.91, 3.39, 3.72, 3.91, 4.00, 4.00],
+                        smooth: true
+                    },
+                    {
+                        name: '50%可并行',
+                        type: 'line',
+                        data: [1, 1.33, 1.60, 1.78, 1.88, 1.94, 1.97, 1.99, 2.00],
+                        smooth: true
+                    }
+                ]
+            });
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+        
+        function initializeArchitectureEvolution() {
+            const chart = echarts.init(document.getElementById('architecture-evolution'));
+            chart.setOption({
+                title: {
+                    text: '计算机架构发展历程',
+                    left: 'center'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        const param = params[0];
+                        const data = param.data;
+                        return data[0] + ':<br/>代表技术: ' + data[2];
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['1940s', '1960s', '1980s', '2000s', '2010s', '现在', '未来']
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '性能提升',
+                    axisLabel: {
+                        formatter: '{value}x'
+                    },
+                    scale: true
+                },
+                series: [
+                    {
+                        type: 'scatter',
+                        symbolSize: function (data) {
+                            return Math.sqrt(data[1]) * 5;
+                        },
+                        data: [
+                            ['冯·诺依曼架构', 1, 'ENIAC, EDVAC'],
+                            ['集成电路', 10, 'IBM 360'],
+                            ['RISC革命', 100, 'MIPS, SPARC'],
+                            ['多核处理器', 1000, 'Intel Core, AMD Opteron'],
+                            ['GPU与异构计算', 10000, 'NVIDIA CUDA, AMD GCN'],
+                            ['AI加速器', 50000, 'TPU, NPU'],
+                            ['量子计算', 1000000, 'IBM Q, Google Sycamore']
+                        ],
+                        itemStyle: {
+                            color: function(params) {
+                                const colorList = [
+                                    '#7000FF', '#0066FF', '#FF0066', 
+                                    '#00CC99', '#FF9500', '#8A2BE2', 
+                                    '#00BFFF'
+                                ];
+                                return colorList[params.dataIndex];
+                            }
+                        },
+                        label: {
+                            show: true,
+                            formatter: function(params) {
+                                return params.data[0];
+                            },
+                            position: 'top'
+                        }
+                    }
+                ]
+            });
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+    </script>
+</body>
+</html>
