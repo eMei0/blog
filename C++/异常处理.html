@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C++ 异常处理机制 | 完全指南</title>
+    <link href="https://fastly.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fastly.jsdelivr.net/npm/@fontsource/inter@4.5.14/index.css" rel="stylesheet">
+    <link href="https://fastly.jsdelivr.net/npm/@fontsource/source-code-pro@4.5.12/index.css" rel="stylesheet"> 
+    <link href="https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.1/css/all.min.css" rel="stylesheet">
+    <link href="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://fastly.jsdelivr.net/npm/framer-motion@10.12.16/dist/framer-motion.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/components/prism-cpp.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/echarts@5.4.2/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: rgba(99, 102, 241, 0.2);
+            --secondary: #ec4899;
+            --secondary-light: rgba(236, 72, 153, 0.2);
+            --accent: #14b8a6;
+            --accent-light: rgba(20, 184, 166, 0.2);
+            --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #eef2f7 100%);
+        }
+        
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg-gradient);
+            overflow-x: hidden;
+        }
+        
+        .code-font {
+            font-family: 'Source Code Pro', monospace;
+        }
+        
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+        
+        .gradient-text {
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+        
+        .primary-gradient {
+            background-image: linear-gradient(45deg, var(--primary), rgba(99, 102, 241, 0.7));
+        }
+        
+        .secondary-gradient {
+            background-image: linear-gradient(45deg, var(--secondary), rgba(236, 72, 153, 0.7));
+        }
+        
+        .accent-gradient {
+            background-image: linear-gradient(45deg, var(--accent), rgba(20, 184, 166, 0.7));
+        }
+        
+        .primary-card {
+            background-image: linear-gradient(135deg, var(--primary-light) 0%, rgba(255,255,255,0.8) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+        
+        .secondary-card {
+            background-image: linear-gradient(135deg, var(--secondary-light) 0%, rgba(255,255,255,0.8) 100%);
+            border: 1px solid rgba(236, 72, 153, 0.3);
+        }
+        
+        .accent-card {
+            background-image: linear-gradient(135deg, var(--accent-light) 0%, rgba(255,255,255,0.8) 100%);
+            border: 1px solid rgba(20, 184, 166, 0.3);
+        }
+        
+        .neutral-card {
+            background-image: linear-gradient(135deg, rgba(241, 245, 249, 0.8) 0%, rgba(255,255,255,0.9) 100%);
+            border: 1px solid rgba(203, 213, 225, 0.5);
+        }
+        
+        .hero-number {
+            font-size: 10rem;
+            line-height: 1;
+            opacity: 0.15;
+            position: absolute;
+            top: -2rem;
+            right: 1rem;
+            font-weight: 800;
+        }
+        
+        .section-scroll {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: all 0.8s ease-out;
+        }
+        
+        .section-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Code block styling enhancements */
+        pre[class*="language-"] {
+            border-radius: 0.5rem;
+            margin: 1.5rem 0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .code-window {
+            position: relative;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .code-header {
+            background: #343541;
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+        }
+        
+        .code-dot {
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(241, 245, 249, 0.5);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+        
+        /* Animation classes */
+        .fade-in {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .staggered-fade-in > * {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        
+        /* Navigation highlight */
+        .nav-highlight {
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            height: 2px;
+            background: var(--primary);
+            transition: all 0.3s ease;
+        }
+        
+        .nav-item {
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .sticky-nav {
+            backdrop-filter: blur(8px);
+            background: rgba(255, 255, 255, 0.8);
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <header id="a4bf90e3-eb7f-4c8c-acf8-72fcac234ef5" class="fixed w-full top-0 z-50 transition-all duration-300">
+        <nav id="cc0b7af3-30db-45fe-a48e-d3ff3a102fb6" class="container mx-auto px-4 py-4 flex items-center justify-between">
+            <div id="f09c5ed3-15a9-47d5-8a69-6e44ecfcb588" class="flex items-center">
+                <div id="f1c45614-42f3-4356-a03e-ff2426d91801" class="w-10 h-10 rounded-lg flex items-center justify-center primary-card">
+                    <i class="fas fa-bug-slash text-indigo-600 text-xl"></i>
+                </div>
+                <h1 id="ef0458f2-23c1-4a4d-8593-cdee6e518e18" class="ml-3 text-lg font-bold">C++ Exception <span class="text-indigo-600">Handler</span></h1>
+            </div>
+            <div id="e201c9c4-2caa-4dba-a31a-e33891dec2cc" class="hidden md:flex space-x-8 items-center">
+                <div id="a3ec0e02-c70b-4949-81e6-e8a463056be5" class="nav-item">基础概念</div>
+                <div id="c726c44b-1606-4e86-8e93-e077e735f3f9" class="nav-item">语法与用法</div>
+                <div id="b0a06434-273e-43dd-ab51-25a6860e5e93" class="nav-item">高级特性</div>
+                <div id="a6222fe9-b3bd-42ca-8fb2-d11c9752f3a3" class="nav-item">最佳实践</div>
+                <div id="e1a302ad-854a-4b44-b030-3cc8aa44cbb9" class="nav-highlight" style="width: 0;"></div>
+            </div>
+            <div id="e71f6fa0-d047-44de-af9b-3a4ef67468f0" class="md:hidden">
+                <i class="fas fa-bars text-gray-700"></i>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section id="f96d4ced-da7e-4c36-99c5-e2c3ea4f0a6c" class="pt-32 pb-20 px-4 relative overflow-hidden section-scroll">
+        <div id="aace1ab1-e937-4813-8fe7-d25a19c60198" class="absolute top-0 left-0 w-full h-full">
+            <svg id="eabd63c4-4a7b-45a2-ab3a-ad13a2e06401" class="w-full h-full opacity-10" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <path d="M0,0 L100,0 L100,100 L0,100 Z" fill="none" stroke="#6366f1" stroke-width="0.2"></path>
+                <path d="M0,25 L100,25" stroke="#6366f1" stroke-width="0.1"></path>
+                <path d="M0,50 L100,50" stroke="#6366f1" stroke-width="0.1"></path>
+                <path d="M0,75 L100,75" stroke="#6366f1" stroke-width="0.1"></path>
+                <path d="M25,0 L25,100" stroke="#6366f1" stroke-width="0.1"></path>
+                <path d="M50,0 L50,100" stroke="#6366f1" stroke-width="0.1"></path>
+                <path d="M75,0 L75,100" stroke="#6366f1" stroke-width="0.1"></path>
+            </svg>
+        </div>
+        
+        <div id="f901288e-ec1e-47b8-85b8-9caa9647847c" class="container mx-auto relative">
+            <div id="d69de3ea-8e6f-47a5-8a46-fe4c428ebd6d" class="flex flex-col md:flex-row items-center justify-between">
+                <div id="b445e254-cc5a-4e43-9831-1154b9e5e5ea" class="md:w-1/2 mb-10 md:mb-0">
+                    <h1 id="c45acf6f-10e1-4557-9e59-028d590afdb7" class="text-4xl md:text-6xl font-black mb-6">
+                        <span id="d5196472-c0e4-43d3-a7ac-782059c5c26b" class="block gradient-text primary-gradient">异常处理</span>
+                        <span id="a2711c9e-5222-40d3-87a2-887064de85f9" class="text-2xl md:text-3xl font-medium text-gray-600">C++ Exception Handling</span>
+                    </h1>
+                    <p id="ec42eb20-e2e5-49cb-b902-0e1c1642dc82" class="text-lg text-gray-700 mb-8">一种优雅地处理运行时错误的机制，让您的代码更健壮、更可靠。</p>
+                    <div id="dd3df4f5-cedd-45a7-bcec-09f9fc83d794" class="flex space-x-4">
+                        <a id="bc246d07-e343-4294-8a0c-9a6184b086ce" href="#fundamentals" class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-300 flex items-center">
+                            <span id="bb0e6616-8bcf-459d-8ebc-100e9fe5e365">开始探索</span>
+                            <i class="fas fa-chevron-right ml-2"></i>
+                        </a>
+                        <a id="f957163b-2f33-4524-8435-875e5c4b8388" href="#best-practices" class="px-6 py-3 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-all duration-300">
+                            最佳实践
+                        </a>
+                    </div>
+                </div>
+                
+                <div id="d4b82367-3e79-4571-87ec-1f6a7b1fede8" class="md:w-1/2 relative">
+                    <div id="c1b26100-492d-48bf-8eaf-4fb368601d48" class="absolute -top-20 -right-20 text-[200px] font-bold text-indigo-100 z-0 select-none hidden md:block">
+                        try
+                    </div>
+                    <div id="f70ee0fd-a19d-4ba7-8d47-1966e07e0205" class="relative z-10 bg-white rounded-2xl shadow-lg p-6 border border-indigo-100">
+                        <div id="b05d3d11-d96d-4883-9721-40f507c8b86a" class="code-window">
+                            <div id="e56e9244-da5b-4623-8952-f270979e0a5a" class="code-header">
+                                <div id="a40688c8-e6f0-46e2-a1d2-abfe4de2f140" class="code-dot bg-red-400"></div>
+                                <div id="fdc5dcef-42ea-4f8a-a4a4-a20c0febd085" class="code-dot bg-yellow-400"></div>
+                                <div id="f5aa5981-281d-4fb0-99d4-e50e45c711cf" class="code-dot bg-green-400"></div>
+                                <div id="a86acf2b-6a47-4319-b66a-9df543e2e544" class="text-gray-400 text-xs ml-2 code-font">exception_demo.cpp</div>
+                            </div>
+<pre><code class="language-cpp">#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+
+class ResourceManager {
+private:
+    int* resource;
+public:
+    ResourceManager() {
+        try {
+            resource = new int[1000];
+            std::cout &lt;&lt; "资源获取成功" &lt;&lt; std::endl;
+            
+            // 模拟初始化失败
+            throw std::runtime_error("初始化资源失败");
+        } 
+        catch (...) {
+            delete[] resource;  // 清理已分配的资源
+            throw;  // 重新抛出异常
+        }
+    }
+    
+    ~ResourceManager() {
+        delete[] resource;
+        std::cout &lt;&lt; "资源已释放" &lt;&lt; std::endl;
+    }
+};
+
+int main() {
+    try {
+        std::cout &lt;&lt; "创建资源管理器..." &lt;&lt; std::endl;
+        ResourceManager rm;
+        std::cout &lt;&lt; "使用资源..." &lt;&lt; std::endl;
+    } 
+    catch (const std::exception& e) {
+        std::cerr &lt;&lt; "捕获到异常: " &lt;&lt; e.what() &lt;&lt; std::endl;
+    }
+    
+    std::cout &lt;&lt; "程序正常结束" &lt;&lt; std::endl;
+    return 0;
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="b39d247c-2765-4661-b885-a5d862062a90" class="flex flex-col md:flex-row justify-between mt-24 space-y-6 md:space-y-0">
+                <div id="fdcdf5da-ffbb-47e3-8c9c-71ef03727f34" class="w-full md:w-1/3 p-6 rounded-xl primary-card hover:shadow-lg transition-all duration-300 relative overflow-hidden">
+                    <div id="d8a3080f-3c63-4d9c-9d31-2f3623e33e30" class="hero-number text-indigo-600">1</div>
+                    <h3 id="d0c7cb67-dd63-4ac7-9ad2-c34910c50abd" class="text-xl font-bold mb-2 z-10 relative">错误检测与处理分离</h3>
+                    <p id="b2a625e3-916b-42df-9546-8439fe159f8e" class="text-gray-700 z-10 relative">异常处理机制将检测错误的代码与处理错误的代码分离，使程序结构更清晰。</p>
+                </div>
+                
+                <div id="ab808cdd-a1d6-49a0-9751-df03c64e3795" class="w-full md:w-1/3 p-6 rounded-xl secondary-card hover:shadow-lg transition-all duration-300 relative overflow-hidden">
+                    <div id="a39476bf-92df-4a1d-ba7c-9fd4ab1af07d" class="hero-number text-pink-600">2</div>
+                    <h3 id="c1dc83fb-8821-4c6b-a686-52c13460ebb4" class="text-xl font-bold mb-2 z-10 relative">自动栈展开</h3>
+                    <p id="c9177905-d7c9-46fa-afbb-7c8a3e4b7e8f" class="text-gray-700 z-10 relative">异常发生时自动调用栈上对象的析构函数，确保资源正确释放，防止内存泄漏。</p>
+                </div>
+                
+                <div id="b2ac0d98-c52d-4b11-880a-96b40ccb0f6c" class="w-full md:w-1/3 p-6 rounded-xl accent-card hover:shadow-lg transition-all duration-300 relative overflow-hidden">
+                    <div id="a59362e5-1148-4c2b-be77-47d1be0aa2e3" class="hero-number text-teal-600">3</div>
+                    <h3 id="a525b281-35f9-4a50-bd12-7fae1af6d9b4" class="text-xl font-bold mb-2 z-10 relative">类型安全</h3>
+                    <p id="a0bd10e9-efdb-452a-9959-a210c99f52c8" class="text-gray-700 z-10 relative">C++异常处理是类型安全的，可以精确匹配异常类型，有针对性地处理不同错误情况。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Fundamentals Section -->
+    <section id="fundamentals" class="py-24 px-4 section-scroll">
+        <div id="dc9c93e2-4862-44c0-95cf-8b6f8eac5242" class="container mx-auto">
+            <div id="d73eefc7-dfc8-4119-89e1-5566dde4f36b" class="mb-16 text-center">
+                <span id="d71fa8b6-c58a-4959-ac7a-669dbcb8b2ac" class="text-lg font-medium text-indigo-600">第一章</span>
+                <h2 id="bb5d4c82-5157-4c21-9efd-af915ab4eb5e" class="text-4xl md:text-5xl font-bold mt-2 mb-4">什么是异常处理机制</h2>
+                <p id="c3e54d87-4b44-4098-9bea-f9c8af203369" class="text-xl text-gray-600 max-w-3xl mx-auto">理解C++中处理错误和异常情况的优雅方式</p>
+            </div>
+            
+            <div id="cf24bd52-7836-47e0-af93-348c753e0f9f" class="bento-grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div id="b2475221-5fdb-4974-b911-a16b22e75c06" class="md:col-span-8 p-8 rounded-xl neutral-card">
+                    <h3 id="a61264f6-9c01-43bb-a278-8aecc19c7dca" class="text-2xl font-bold mb-4">异常处理的定义</h3>
+                    <p id="c2797e3a-8100-4bd9-bc18-d260d2503282" class="text-gray-700 mb-4">
+                        异常处理是C++提供的一种处理<strong class="text-indigo-700">程序运行时错误</strong>的机制。它允许程序在遇到异常情况时能够<strong class="text-indigo-700">优雅地处理错误</strong>，而不是直接崩溃。
+                    </p>
+                    <p id="db83160e-6da8-4b8e-b77e-3148a772a9bb" class="text-gray-700 mb-4">
+                        异常处理机制将<strong class="text-indigo-700">错误检测代码</strong>与<strong class="text-indigo-700">错误处理代码</strong>分离，使得程序结构更加清晰。这种分离使得开发者可以专注于正常逻辑的实现，而不必在每个操作后都检查错误状态。
+                    </p>
+                    <div id="e4282fe7-9604-4af8-ac75-b8f3fa41c5f3" class="flex items-center mt-8 p-4 bg-indigo-50 rounded-lg">
+                        <div id="a5648ce9-283c-4479-a0d3-1179e5190253" class="mr-4">
+                            <i class="fas fa-lightbulb text-2xl text-yellow-500"></i>
+                        </div>
+                        <div id="d8c1f863-f645-4337-9b6e-e10207bc8d82">
+                            <h4 id="f9e47c34-4d85-4b59-82a6-605e7eb77011" class="font-bold text-gray-800">关键点</h4>
+                            <p id="d198ceaa-5e51-4903-b019-cd0a14578e15" class="text-sm text-gray-700">
+                                异常处理不应用于处理正常的控制流程或可预期的程序状态，而应专注于处理那些真正的"异常"情况。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="c181c6e7-7f46-42bd-b96c-73c5cc8ad6c0" class="md:col-span-4 p-6 rounded-xl primary-card flex flex-col">
+                    <h3 id="fb2409bb-5686-4c46-a1fc-dc00a93e1795" class="text-xl font-bold mb-4">异常 vs 错误码</h3>
+                    <div id="abnormal-chart" class="h-64 flex-grow mb-4"></div>
+                    <div id="a2e673dc-211c-4eb1-ae50-7857076110d9" class="text-sm text-gray-600">
+                        异常处理相比传统错误码方法，能更好地处理复杂调用链中的错误传播。
+                    </div>
+                </div>
+                
+                <div id="a643f101-77b8-4dac-9f70-3e227904cdd8" class="md:col-span-6 p-6 rounded-xl secondary-card">
+                    <h3 id="b4881d57-75e6-4cf2-abfa-03c2efd0e893" class="text-xl font-bold mb-4">异常处理的优势</h3>
+                    <ul id="b3931ed2-ec01-4d45-8e25-3f8edfbf5e3d" class="space-y-3">
+                        <li id="afdfa13b-2473-4015-b0ce-fb40ef9b0d44" class="flex items-start">
+                            <i class="fas fa-check-circle text-pink-500 mt-1 mr-2"></i>
+                            <span id="afd55090-fa94-489d-b584-525918ca8955">将正常代码路径与错误处理代码分离，提高可读性</span>
+                        </li>
+                        <li id="accaa11e-5ed1-4b5a-9568-2cfc08705d0e" class="flex items-start">
+                            <i class="fas fa-check-circle text-pink-500 mt-1 mr-2"></i>
+                            <span id="b92a8b3c-f6f1-45fc-8180-13c20a594fd3">错误不能被忽略，未处理的异常会终止程序</span>
+                        </li>
+                        <li id="aa12e498-94d2-47c1-9445-c15cc0424d81" class="flex items-start">
+                            <i class="fas fa-check-circle text-pink-500 mt-1 mr-2"></i>
+                            <span id="bfe6fcf9-bfc7-4fcb-bf93-a2d03dc8939a">能够在调用栈中传播错误信息，无需每个函数都处理错误</span>
+                        </li>
+                        <li id="ac28a4c0-bdb9-43cf-b49b-a2231f362a8d" class="flex items-start">
+                            <i class="fas fa-check-circle text-pink-500 mt-1 mr-2"></i>
+                            <span id="ad8fd0b6-7fd6-40c5-89ca-a12c8a3e5056">适合处理构造函数中的错误（构造函数无法返回错误码）</span>
+                        </li>
+                        <li id="a7509423-f9fa-464f-ad34-c1d294944956" class="flex items-start">
+                            <i class="fas fa-check-circle text-pink-500 mt-1 mr-2"></i>
+                            <span id="f7f9005c-1c0a-42fe-9b45-c3e93c36bc23">支持将异常对象的完整信息传递给处理程序</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div id="f8c09117-dfcc-4a7e-b157-e57b4c6e9884" class="md:col-span-6 p-6 rounded-xl accent-card">
+                    <h3 id="a76b8030-629e-4d86-af98-8ad84830cd00" class="text-xl font-bold mb-4">异常处理的局限性</h3>
+                    <ul id="c99d628f-d2c3-404d-95d5-2cb8e7f8eecb" class="space-y-3">
+                        <li id="cdec00cd-bab0-46c1-bcaa-2c106fa73ae3" class="flex items-start">
+                            <i class="fas fa-exclamation-circle text-teal-500 mt-1 mr-2"></i>
+                            <span id="a0fdcbf7-19c1-471e-bd60-737cc0d9369f">性能开销较大，特别是当异常被抛出时</span>
+                        </li>
+                        <li id="d04a9732-f4da-4cc9-8448-0e3264ce9e76" class="flex items-start">
+                            <i class="fas fa-exclamation-circle text-teal-500 mt-1 mr-2"></i>
+                            <span id="c0d7dce4-c9e8-4832-b30d-51bd77fa305b">可能导致程序流程难以追踪，特别是在大型项目中</span>
+                        </li>
+                        <li id="c5481a98-a982-45f1-bfd6-01f154efe176" class="flex items-start">
+                            <i class="fas fa-exclamation-circle text-teal-500 mt-1 mr-2"></i>
+                            <span id="a2295750-3f87-494c-b186-a9c0f799e67c">不适合用于资源受限的嵌入式系统</span>
+                        </li>
+                        <li id="e6ec0fa0-ce0d-44fc-bb21-e3ab486c13cf" class="flex items-start">
+                            <i class="fas fa-exclamation-circle text-teal-500 mt-1 mr-2"></i>
+                            <span id="ecd57fcb-a036-4aab-975f-6212d1aa463c">需要仔细设计以避免资源泄漏</span>
+                        </li>
+                        <li id="e73bcfcb-5c56-408c-bd03-c4eb18c150fa" class="flex items-start">
+                            <i class="fas fa-exclamation-circle text-teal-500 mt-1 mr-2"></i>
+                            <span id="ba035b45-958a-45ba-848a-f3fd8feea7c3">可能与某些编程范式（如实时系统）不兼容</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Syntax Section -->
+    <section id="syntax" class="py-24 px-4 bg-gradient-to-br from-indigo-50 to-white section-scroll">
+        <div id="a00acff5-6326-46b3-82c0-3a0b87968bcf" class="container mx-auto">
+            <div id="a17bbe63-ef0f-45cc-bab6-f671729f4521" class="mb-16 text-center">
+                <span id="ccb4c0dc-9140-48ac-b091-dce11ffeb1c5" class="text-lg font-medium text-indigo-600">第二章</span>
+                <h2 id="c45b4a27-351b-45e9-9717-c5b66068fefb" class="text-4xl md:text-5xl font-bold mt-2 mb-4">C++异常处理的基本语法</h2>
+                <p id="d884c5d0-fb33-4407-ac7e-a4561fcd24c5" class="text-xl text-gray-600 max-w-3xl mx-auto">掌握try, throw和catch的用法，建立异常处理的基础</p>
+            </div>
+            
+            <div id="e9fe0e8d-dc15-4acd-8112-bc7220f7dfc2" class="bento-grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div id="b6a2230c-f59e-4f8c-bf10-cb2cba7bba2c" class="md:col-span-5 p-8 rounded-xl neutral-card flex flex-col justify-between">
+                    <div id="e4b6309e-d000-4cb2-b66a-421175f19bd3">
+                        <h3 id="a29f6386-8fa1-4c38-9fda-046a028e16b5" class="text-3xl font-bold mb-6">基本组成部分</h3>
+                        <p id="e1397720-5365-4fb7-8e7d-5ca001e74b0e" class="text-gray-700 mb-6">
+                            C++异常处理机制由三个关键部分组成，它们协同工作以检测和处理程序中的异常情况。
+                        </p>
+                        
+                        <div id="e7f490e0-aa4d-46bf-a130-29c1399353b2" class="space-y-6">
+                            <div id="b74c3e4e-3278-47cd-bcb6-2b254c7e8292" class="flex">
+                                <div id="b9530042-023b-49e6-8008-3a2353bb99b2" class="mr-4 h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-shield-alt text-indigo-600"></i>
+                                </div>
+                                <div id="ff823437-ee8c-4ac0-85b5-ff5582e886a3">
+                                    <h4 id="e24044c0-d834-4974-ab36-314972c626c9" class="text-xl font-bold mb-1">try 块</h4>
+                                    <p id="cf11bdce-aef2-420c-b597-c92cd3e66fd0" class="text-gray-700">包含可能引发异常的代码</p>
+                                </div>
+                            </div>
+                            
+                            <div id="aabed20e-8c04-47a1-a977-21e05cd2ff83" class="flex">
+                                <div id="e96851a8-1417-4fc5-9c14-123754fb0318" class="mr-4 h-12 w-12 rounded-full bg-pink-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-bomb text-pink-600"></i>
+                                </div>
+                                <div id="cc1e7553-e5d6-44c0-b41f-3361173d70b7">
+                                    <h4 id="a6062902-90e2-4dee-8baa-eee7de63b272" class="text-xl font-bold mb-1">throw 语句</h4>
+                                    <p id="ba3fa90d-88b3-4339-904f-de94c662d2c1" class="text-gray-700">当检测到异常情况时，用于抛出异常</p>
+                                </div>
+                            </div>
+                            
+                            <div id="a473b7c3-0cef-4d03-8ab6-d52d69eb89fb" class="flex">
+                                <div id="c79288e7-43d4-4ab1-9612-950abef5b001" class="mr-4 h-12 w-12 rounded-full bg-teal-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-hand-catching text-teal-600"></i>
+                                </div>
+                                <div id="baede53e-73d0-45a0-8b06-9dbe5d00cf72">
+                                    <h4 id="a43ef8e7-f0f9-4c0a-a9d0-492a9c936377" class="text-xl font-bold mb-1">catch 块</h4>
+                                    <p id="c58f0538-4af5-4c0d-b253-7f9e4c8fefd3" class="text-gray-700">用于捕获并处理异常</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="e3ffe203-5e23-4a6c-99d0-a5e6fa387cd1" class="md:col-span-7 p-6 rounded-xl primary-card">
+                    <h3 id="bab08e7c-70c0-4d64-9621-65c09330a2ac" class="text-2xl font-bold mb-4">基本语法示例</h3>
+                    <div id="d235a304-c4b4-4939-a49b-d9d3f0a3b7e7" class="code-window">
+                        <div id="a49cf5b7-89af-42f9-9935-de7dd9b70d98" class="code-header">
+                            <div id="da39ec28-17cd-44c4-af5c-d4621010581b" class="code-dot bg-red-400"></div>
+                            <div id="f36a913c-a070-4ea5-9f21-ccb0ef1acee9" class="code-dot bg-yellow-400"></div>
+                            <div id="ae5f9c18-542c-4b79-a576-64e6bdb770e1" class="code-dot bg-green-400"></div>
+                            <div id="e2022c2b-828c-41a3-90a8-9e9a52d77fa4" class="text-gray-400 text-xs ml-2 code-font">basic_exception.cpp</div>
+                        </div>
+<pre><code class="language-cpp">#include &lt;iostream&gt;
+using namespace std;
+
+int main() {
+    try {
+        // 可能引发异常的代码
+        int divisor = 0;
+        if (divisor == 0) {
+            throw "除数不能为零！";  // 抛出异常
+        }
+        int result = 10 / divisor;
+    }
+    catch (const char* msg) {
+        // 处理异常
+        cerr &lt;&lt; "捕获到异常: " &lt;&lt; msg &lt;&lt; endl;
+    }
+    
+    cout &lt;&lt; "程序继续执行..." &lt;&lt; endl;
+    return 0;
+}</code></pre>
+                    </div>
+                    
+                    <div id="fda84098-6f07-48c4-8d31-14b9d4bb9874" class="mt-6 p-4 bg-white rounded-lg border border-indigo-100">
+                        <h4 id="ab610785-9381-4dc4-9407-6844c73f312f" class="font-bold mb-2">执行流程分析</h4>
+                        <ol id="d488254f-cb89-4caf-ae24-c9943c4f09a0" class="list-decimal ml-5 space-y-1 text-sm text-gray-700">
+                            <li id="f2cf02ad-78d5-49e5-8573-c1409039cc85">程序检测到除数为0的异常情况</li>
+                            <li id="e323e9d5-919d-4db7-8876-02fe1c3464ac">通过<code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">throw</code>语句抛出一个字符串异常</li>
+                            <li id="aecbbdae-974c-4e0e-9ae2-bebe7f8dd005">程序立即跳转到匹配的<code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">catch</code>块</li>
+                            <li id="c4ac000e-1538-4dbe-9641-6ddd3866624d">执行<code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">catch</code>块中的错误处理代码</li>
+                            <li id="e3df7349-0227-46a8-b6f4-75897c0a5051">继续执行<code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">try-catch</code>块后的代码</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div id="f413ce5d-97c5-4599-bd32-cbe5654d6306" class="md:col-span-6 p-6 rounded-xl secondary-card">
+                    <h3 id="bd219251-dda5-4874-bdf4-354cdc324204" class="text-2xl font-bold mb-4">自定义异常类</h3>
+                    <div id="bd9b41f5-cda9-40e2-9777-085d584aa52c" class="code-window">
+                        <div id="ff230e2e-e99c-4df6-8c74-baf563e1e8fc" class="code-header">
+                            <div id="e9c52780-7ca2-4b42-ab64-acd8a11f4568" class="code-dot bg-red-400"></div>
+                            <div id="f29a95db-302d-48ae-874e-a3514764e242" class="code-dot bg-yellow-400"></div>
+                            <div id="db939938-bb6f-47f9-b6f6-2a95c888758a" class="code-dot bg-green-400"></div>
+                            <div id="c9248c88-759a-43b7-9979-df3e4b15937e" class="text-gray-400 text-xs ml-2 code-font">custom_exception.cpp</div>
+                        </div>
+<pre><code class="language-cpp">#include &lt;iostream&gt;
+#include &lt;exception&gt;
+using namespace std;
+
+class MyException : public exception {
+public:
+    const char* what() const throw() {
+        return "发生了自定义异常";
+    }
+};
+
+int main() {
+    try {
+        throw MyException();
+    }
+    catch (const MyException& e) {
+        cout &lt;&lt; "捕获到异常: " &lt;&lt; e.what() &lt;&lt; endl;
+    }
+    return 0;
+}</code></pre>
+                    </div>
+                    <p id="d6ea907a-f72f-44a7-9e54-a487bd2fa6c4" class="mt-4 text-sm text-gray-600">
+                        自定义异常类通常继承自<code class="bg-gray-100 px-1 py-0.5 rounded text-pink-600">std::exception</code>基类，并重写<code class="bg-gray-100 px-1 py-0.5 rounded text-pink-600">what()</code>方法来提供异常的描述信息。
+                    </p>
+                </div>
+                
+                <div id="ff89607b-68c6-47f8-8e41-56b43f7ff66d" class="md:col-span-6 p-6 rounded-xl accent-card">
+                    <h3 id="fc39a13a-bc42-4f51-b4bd-a8d44adcc7bd" class="text-2xl font-bold mb-4">标准异常类</h3>
+                    <p id="b7aaf12d-8cca-4835-9d9c-c4bb4acc89ef" class="mb-4">
+                        C++ 标准库提供了一系列的异常类，都派生自<code class="bg-gray-100 px-1 py-0.5 rounded text-teal-600">std::exception</code>基类：
+                    </p>
+                    
+                    <div id="b13af479-3743-437b-9571-ce5fe7c8f738" class="flex space-x-4 mb-4">
+                        <div id="b58a5733-c383-4c19-9714-a2b36527dc16" class="flex-1">
+                            <h4 id="cc85a249-9d38-4ef0-8732-8fbda37814e4" class="font-bold mb-2 text-teal-700">std::logic_error</h4>
+                            <ul id="a8757499-9f81-4e70-87e1-1fa1693f7d9d" class="list-disc ml-5 space-y-1 text-sm">
+                                <li id="a2d28f5c-6af2-400a-9698-f05ba436a264">std::invalid_argument</li>
+                                <li id="a1963be4-2880-45ff-963a-65dc7a1a505f">std::domain_error</li>
+                                <li id="da4ef0af-71e3-4e94-b968-9df867a06cd7">std::length_error</li>
+                                <li id="b997caba-5037-40e9-a900-ac82b5584b2b">std::out_of_range</li>
+                            </ul>
+                        </div>
+                        
+                        <div id="c9535c3f-1e82-4c0a-b766-049cf53dccd5" class="flex-1">
+                            <h4 id="cff2968f-293b-4d11-a228-09e526339dce" class="font-bold mb-2 text-teal-700">std::runtime_error</h4>
+                            <ul id="e88b19bc-8a76-41fd-a3f3-b804d519b8a5" class="list-disc ml-5 space-y-1 text-sm">
+                                <li id="a04b2e96-706c-4b94-a9e7-2177aadeaa3a">std::overflow_error</li>
+                                <li id="d0cc3763-e07f-4a89-9f78-9d2e689c96fa">std::underflow_error</li>
+                                <li id="c4058024-bc0a-4754-b61a-faa4e6238670">std::range_error</li>
+                                <li id="dc8692e7-0477-4c6d-8ba3-2d6ed69ad536">std::system_error</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div id="b089d83e-6e72-40e0-9dc9-aa3ff151b850" class="p-3 bg-white rounded-lg border border-teal-100">
+                        <p id="d6c54456-60bc-454a-868e-1c5ddec69c67" class="text-sm">
+                            <i class="fas fa-info-circle text-teal-500 mr-1"></i>
+                            使用标准异常类可以让代码更加规范，并且与STL库的异常处理机制保持一致。建议自定义异常时继承这些标准异常类。
+                        </p>
+                    </div>
+                </div>
+                
+                <div id="ad86cb8b-445b-4e4c-8424-5f8d56a387e5" class="md:col-span-12 p-8 rounded-xl neutral-card relative overflow-hidden">
+                    <div id="ea6e8e2d-523d-4a47-a1bb-54af7e410ea7" class="absolute right-0 top-0 h-full w-1/2 md:w-1/3 bg-indigo-50 -mr-20 rounded-l-full opacity-50"></div>
+                    <div id="ce9c5659-5c41-4764-9d46-630fda3d8437" class="relative z-10 md:max-w-2xl">
+                        <h3 id="c6c52413-2787-4620-b1ff-13cbbeeca458" class="text-3xl font-black mb-6">抛出与捕获的类型匹配</h3>
+                        <p id="ec425b54-030e-4d1d-9e88-d4452ccc9641" class="text-gray-700 mb-6">
+                            C++异常处理机制在捕获异常时，会按照<strong class="text-indigo-700">catch块的顺序</strong>寻找第一个匹配的异常类型。匹配规则遵循C++的类型转换规则：
+                        </p>
+                        
+                        <ul id="ef74f3f1-d4b1-4b12-9295-84f89da646c2" class="space-y-3 mb-6">
+                            <li id="e7c16429-bc3b-4111-8048-cd19a9062789" class="flex items-start">
+                                <i class="fas fa-caret-right text-indigo-500 mt-1 mr-2"></i>
+                                <span id="aebe8d13-f66c-48d4-8f95-8efd6d9841b5"><strong>精确匹配</strong>：抛出的异常类型与catch参数类型完全相同</span>
+                            </li>
+                            <li id="b069f815-e472-4fc3-b2a8-d39e580fe95f" class="flex items-start">
+                                <i class="fas fa-caret-right text-indigo-500 mt-1 mr-2"></i>
+                                <span id="cace7dbf-5fe2-4696-ada9-f58e003e2605"><strong>派生类匹配</strong>：抛出的异常是catch参数类型的派生类</span>
+                            </li>
+                            <li id="ad84b895-885e-460c-801c-9b36ec036b3a" class="flex items-start">
+                                <i class="fas fa-caret-right text-indigo-500 mt-1 mr-2"></i>
+                                <span id="e9eca232-3b87-41ce-85f5-87c18567a450"><strong>指针匹配</strong>：如果catch参数是指针类型，则允许从派生类指针到基类指针的转换</span>
+                            </li>
+                            <li id="a5ba37b7-1cca-44a3-943a-58f2b752f446" class="flex items-start">
+                                <i class="fas fa-caret-right text-indigo-500 mt-1 mr-2"></i>
+                                <span id="d984b265-c080-4aaf-8292-497dd377ba61"><strong>引用匹配</strong>：如果catch参数是引用类型，则允许从派生类引用到基类引用的转换</span>
+                            </li>
+                        </ul>
+                        
+                        <div id="e56b19a3-33cf-4a10-97c9-a740bc469534" class="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                            <h4 id="b7d8ff88-6805-40b6-90f8-c592513f6ed5" class="font-bold mb-2">最佳实践提示</h4>
+                            <p id="abc791e0-4069-4ec5-93b7-45647076d360" class="text-sm">
+                                按照从最具体到最一般的顺序排列多个catch块，以确保异常能被最合适的处理程序捕获。始终将基类异常的catch块放在后面。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Advanced Features Section -->
+    <section id="advanced" class="py-24 px-4 section-scroll">
+        <div id="d7f696e4-6111-4f63-9ae8-4edd815a6cb7" class="container mx-auto">
+            <div id="a3197f76-b76f-43e5-a1bc-635d4e882119" class="mb-16 text-center">
+                <span id="e0dadd1a-2a22-480f-a11b-d280d5b86c03" class="text-lg font-medium text-indigo-600">第三章</span>
+                <h2 id="a5fa5d0b-c380-4756-b78d-79c4eeaa8721" class="text-4xl md:text-5xl font-bold mt-2 mb-4">异常处理的高级特性</h2>
+                <p id="e5158dcf-d5a7-476d-9b08-dd9b3ff5bf4b" class="text-xl text-gray-600 max-w-3xl mx-auto">探索C++异常处理的高级用法与机制</p>
+            </div>
+            
+            <div id="e6aa3e94-9dd4-46dc-a48d-cca520b7a568" class="bento-grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div id="b00163f2-20be-4008-b026-ac41c3c42d70" class="md:col-span-6 p-6 rounded-xl primary-card">
+                    <h3 id="ddbe428a-886f-4cae-85d0-0bc063baa84a" class="text-2xl font-bold mb-4">捕获所有异常</h3>
+                    <div id="c4fa16e6-83c4-4dfd-9e68-9f0f53c06511" class="code-window">
+                        <div id="df3ed49a-2d65-4772-a56b-2c2eca9c4a97" class="code-header">
+                            <div id="f21100cd-49dc-4b88-aae5-23cf1d5aba4a" class="code-dot bg-red-400"></div>
+                            <div id="aeaac3f2-072f-4a9d-b4ae-894f7fec6c14" class="code-dot bg-yellow-400"></div>
+                            <div id="f310daf8-473d-41e3-afbb-4b8fc865c661" class="code-dot bg-green-400"></div>
+                            <div id="e79672c3-f34a-4e29-8e02-cf81f60d5af0" class="text-gray-400 text-xs ml-2 code-font">catch_all.cpp</div>
+                        </div>
+<pre><code class="language-cpp">try {
+    // 可能抛出任何类型的异常
+}
+catch (const std::exception& e) {
+    // 处理std::exception及其派生类异常
+    std::cerr &lt;&lt; "标准异常: " &lt;&lt; e.what() &lt;&lt; std::endl;
+}
+catch (...) {
+    // 处理其它所有异常
+    std::cerr &lt;&lt; "捕获到未知类型的异常" &lt;&lt; std::endl;
+}</code></pre>
+                    </div>
+                    <p id="f7341600-2a72-467c-8863-1e90f34d491a" class="mt-4 text-sm text-gray-600">
+                        使用<code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">catch(...)</code>作为最后一个catch块可以捕获任何类型的异常，但代价是无法获取异常的具体信息。这通常用作最后的安全网。
+                    </p>
+                </div>
+                
+                <div id="e27e35db-d89e-4d04-84af-0c598df52605" class="md:col-span-6 p-6 rounded-xl secondary-card">
+                    <h3 id="dc96c7cd-2514-4ed2-80cc-e563429b299b" class="text-2xl font-bold mb-4">异常重新抛出</h3>
+                    <div id="e49b160f-c388-4a03-8171-1b83bfb284ee" class="code-window">
+                        <div id="fc200d4c-c03b-40b3-b3fa-97b0335f28b8" class="code-header">
+                            <div id="a986b0ec-0e69-450c-9b86-ed1c401100f0" class="code-dot bg-red-400"></div>
+                            <div id="a079997e-389f-436b-9765-7eacf244d9f0" class="code-dot bg-yellow-400"></div>
+                            <div id="c694f7e2-297f-4efc-b32c-2cd82f75c0b5" class="code-dot bg-green-400"></div>
+                            <div id="a8532ead-367e-49b7-b898-392ca4f16da7" class="text-gray-400 text-xs ml-2 code-font">rethrow.cpp</div>
+                        </div>
+<pre><code class="language-cpp">try {
+    // 外部try块
+    try {
+        // 内部try块
+        throw std::runtime_error("原始错误");
+    }
+    catch (const std::exception& e) {
+        std::cout &lt;&lt; "内部捕获: " &lt;&lt; e.what() &lt;&lt; std::endl;
+        // 执行一些清理或日志记录
+        
+        throw;  // 重新抛出当前异常
+    }
+}
+catch (const std::exception& e) {
+    std::cout &lt;&lt; "外部捕获: " &lt;&lt; e.what() &lt;&lt; std::endl;
+}</code></pre>
+                    </div>
+                    <p id="a621979c-097e-499e-b819-05c4ea5c3e85" class="mt-4 text-sm text-gray-600">
+                        使用<code class="bg-gray-100 px-1 py-0.5 rounded text-pink-600">throw;</code>语句（不带参数）可以重新抛出当前捕获的异常，保留原始异常的类型和所有信息。这对于需要在多个层次处理同一异常的情况非常有用。
+                    </p>
+                </div>
+                
+                <div id="c6e054e8-5334-4810-8fd6-84f262580667" class="md:col-span-12 p-8 rounded-xl neutral-card">
+                    <h3 id="fbcbc056-8c3a-4c98-a924-05b38922cfe0" class="text-3xl font-bold mb-6">函数异常规范</h3>
+                    
+                    <div id="e74fd997-ac8e-44e1-83c4-49f8a4813728" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div id="e90c7fcc-0a13-4dce-8fad-58e9a2edbdfa">
+                            <h4 id="e1a332c7-db70-4813-8b28-b4307805a412" class="text-xl font-bold mb-4">C++11之前的语法（已弃用）</h4>
+                            <div id="a0fcbc86-b05e-4a5e-a69e-c220e53be683" class="code-window">
+                                <div id="c8bd9c04-b70b-4766-b862-3aa47be70d37" class="code-header">
+                                    <div id="f33c031a-8cb3-4a63-aa6c-f64585a5cd60" class="code-dot bg-red-400"></div>
+                                    <div id="aa9e0266-107e-4f93-94a4-c476f1c47fe9" class="code-dot bg-yellow-400"></div>
+                                    <div id="b214159c-5917-4957-b705-29ad3978910b" class="code-dot bg-green-400"></div>
+                                    <div id="f546d976-e66a-4add-8eed-8764af3f65b2" class="text-gray-400 text-xs ml-2 code-font">deprecated_spec.cpp</div>
+                                </div>
+<pre><code class="language-cpp">// 指定可能抛出的异常类型（已弃用）
+void func() throw(std::runtime_error, std::logic_error);
+
+// 保证不会抛出任何异常（已弃用）
+void safeFunc() throw();</code></pre>
+                            </div>
+                            <p id="b442705f-9507-4582-bb19-93d034bc2f3f" class="mt-4 text-sm text-gray-600">
+                                这种语法在C++11标准中被弃用，在C++17中被完全移除，因为它在运行时检查异常，性能开销大且难以维护。
+                            </p>
+                        </div>
+                        
+                        <div id="df464e69-57e0-4a05-8f7f-e37ae825490d">
+                            <h4 id="a04dd485-9f1e-4fa0-a5c5-534a8411dfea" class="text-xl font-bold mb-4">C++11引入的noexcept规范</h4>
+                            <div id="b727d3ec-150d-4f37-8e50-a0eaccd4cbb6" class="code-window">
+                                <div id="e638ec93-72b0-4b3c-890b-a85b899c4fc5" class="code-header">
+                                    <div id="a5ca9179-14e9-4c4d-b91f-73e9209a9013" class="code-dot bg-red-400"></div>
+                                    <div id="b9f98e01-7df4-4154-9d56-1acbbb1f6a67" class="code-dot bg-yellow-400"></div>
+                                    <div id="c0b8bda6-1b2e-486e-b6c2-00451f4844b2" class="code-dot bg-green-400"></div>
+                                    <div id="c9fadb15-cf01-4d56-aa54-2aefa268f5e7" class="text-gray-400 text-xs ml-2 code-font">noexcept_spec.cpp</div>
+                                </div>
+<pre><code class="language-cpp">// 保证不会抛出异常
+void safeFunc() noexcept;
+
+// 等同于 noexcept(true)
+void alsoSafeFunc() noexcept(true);
+
+// 可能抛出异常
+void maybeThrow() noexcept(false);  
+
+// noexcept可以与条件表达式结合使用
+template &lt;class T&gt;
+void processValue(T t) noexcept(noexcept(t.process()));</code></pre>
+                            </div>
+                            <p id="cce759df-354d-4778-b6b4-a50ab1ba2c46" class="mt-4 text-sm text-gray-600">
+                                <code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">noexcept</code>规范在编译时检查，如果一个声明为<code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">noexcept</code>的函数抛出了异常且未被捕获，程序将调用<code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">std::terminate()</code>终止。
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div id="a61b3d0c-5640-4639-b9f2-45f413f04cc3" class="mt-8 p-4 bg-indigo-50 rounded-lg">
+                        <h4 id="a1037f06-43fc-45c0-ba26-fa2b91a40540" class="font-bold mb-2">noexcept的重要性</h4>
+                        <p id="c2b01ffd-e368-4c20-8a62-dc14c2daefaa">
+                            <code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">noexcept</code>不仅是一种声明，也是优化的提示。标记为<code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">noexcept</code>的函数可以被编译器更有效地优化，因为它不需要为异常处理设置额外的机制。
+                        </p>
+                        <p id="acda2b6b-9efd-4ad8-929d-21f67d399a78" class="mt-2">
+                            现代C++中，很多标准库函数和移动构造函数/赋值运算符都被标记为<code class="bg-gray-100 px-1 py-0.5 rounded text-indigo-600">noexcept</code>，以提供更好的性能保证。
+                        </p>
+                    </div>
+                </div>
+                
+                <div id="b998efb7-1226-4e8a-904f-f675aba78d90" class="md:col-span-8 p-8 rounded-xl accent-card">
+                    <h3 id="eb432a75-29df-47e9-8ab0-b2f33e83449c" class="text-2xl font-bold mb-6">异常处理的底层机制</h3>
+                    
+                    <div id="a211c760-bf25-423f-b3fe-2ce09afc1094" class="space-y-6">
+                        <div id="dbba33ff-7c83-47d5-a186-7c6f0ce2cc61">
+                            <h4 id="a6a71fc0-2110-4b2b-97b4-607032a77dc7" class="text-xl font-bold mb-2">堆栈展开（Stack Unwinding）</h4>
+                            <p id="bbbcdd6d-d2bc-4da7-9b48-832ce3da35fe" class="text-gray-700">
+                                当异常被抛出时，C++运行时系统会沿着调用栈向上搜索匹配的catch处理程序。在这个过程中，它会：
+                            </p>
+                            <ul id="ed4e2c27-9be4-486a-b35a-f97a04630903" class="list-disc ml-5 mt-2 space-y-1">
+                                <li id="b1adc668-c18e-4f4d-90fb-f25b9d7c8297">按照与创建顺序相反的顺序调用作用域内的局部对象析构函数</li>
+                                <li id="cdb2403e-e2f2-44d0-ab6b-926c15f1c7e2">释放临时对象</li>
+                                <li id="af9db1f2-4be8-4f96-9c5f-0d591f124532">从当前函数返回</li>
+                                <li id="e01a4b11-ab97-4252-afa3-4e83129a9832">在调用者的上下文中继续上述过程</li>
+                            </ul>
+                        </div>
+                        
+                        <div id="f8e67b40-21e5-48df-933a-04bab17672af">
+                            <h4 id="d493bf0c-232a-41dc-9476-0f59da5dd782" class="text-xl font-bold mb-2">异常表（Exception Table）</h4>
+                            <p id="f424c996-19c7-46de-b9b7-b8bd84f86622" class="text-gray-700">
+                                编译器会生成特殊的表格，记录了try块的范围、相应的catch处理程序以及需要调用析构函数的对象信息。这些表格指导运行时系统如何执行堆栈展开。
+                            </p>
+                        </div>
+                        
+                        <div id="a17b7007-dc47-4ac2-a85a-52a3e2692d23">
+                            <h4 id="a831a5a6-fa43-41c4-8f0d-8761bbc4a726" class="text-xl font-bold mb-2">运行时开销</h4>
+                            <p id="ed5092c9-a04e-45ab-aed6-00418461e720" class="text-gray-700">
+                                异常处理机制的设计遵循"零开销原则"：如果不使用它，就不会付出代价。只有在实际抛出异常时，才会产生明显的性能开销。
+                            </p>
+                            <ul id="a3db4820-93b2-4b3f-9db1-d1779870aaf9" class="list-disc ml-5 mt-2 space-y-1">
+                                <li id="c2f46258-fc25-400f-bd5b-27550ff005d1">设置try块的开销很小</li>
+                                <li id="bd66c073-5f88-4b21-ac85-69a51de0db94">抛出异常的开销较大，包括对象复制和堆栈展开</li>
+                                <li id="ce0fb6b7-6c88-4823-8167-c5312bf0cd45">异常发生的频率通常较低，因此平均性能影响可控</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="c343634c-808d-446f-8b4c-dc98f5cd8826" class="md:col-span-4 p-6 rounded-xl primary-card">
+                    <h3 id="d8e6f1c7-d58e-48c7-9aaf-09b18d70afd0" class="text-xl font-bold mb-4">堆栈展开示意图</h3>
+                    <div id="stack-unwinding-chart" class="h-64 mb-4"></div>
+                    <p id="eb2e5d2e-c16e-4c33-b13a-d04c690e0e7f" class="text-sm text-gray-600">
+                        堆栈展开确保了即使在异常发生时，所有已构造的对象都能被正确销毁，从而防止资源泄漏。
+                    </p>
+                    <div id="c32c86a9-f9fc-4163-8bb4-dbe9369e53c8" class="mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                        <p id="cce0c579-ad0d-4d7a-932e-abd60b6c842e" class="text-sm">
+                            <i class="fas fa-exclamation-triangle text-indigo-500 mr-1"></i>
+                            如果在堆栈展开过程中析构函数抛出异常，程序将调用<code class="bg-gray-100 px-1 py-0.5 rounded">std::terminate()</code>终止。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Best Practices Section -->
+    <section id="best-practices" class="py-24 px-4 bg-gradient-to-br from-indigo-50 to-white section-scroll">
+        <div id="abfa3f09-b49d-4bcc-83e8-c6de3ec5df0e" class="container mx-auto">
+            <div id="d92c74c6-71c9-4407-b079-52a4b5ae35a2" class="mb-16 text-center">
+                <span id="c4292580-dc2d-4cf4-aadf-be90834a16aa" class="text-lg font-medium text-indigo-600">第四章</span>
+                <h2 id="ed55be94-a38b-43cd-ba35-6940660ce32c" class="text-4xl md:text-5xl font-bold mt-2 mb-4">异常处理的最佳实践</h2>
+                <p id="ad72d0d1-12ee-4037-a5fd-ea8bf10b5e38" class="text-xl text-gray-600 max-w-3xl mx-auto">如何有效地在现代C++中使用异常处理机制</p>
+            </div>
+            
+            <div id="a63b3b97-ef67-4d8f-888e-39d2e76bf2bc" class="bento-grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div id="bc001d21-4063-4674-af5a-6503acb14519" class="md:col-span-6 p-8 rounded-xl neutral-card">
+                    <h3 id="bbf6de55-e55c-4a0b-8e59-c0e97209c9db" class="text-2xl font-bold mb-6">何时使用异常处理</h3>
+                    
+                    <div id="d06cecb8-2e6b-4077-8abc-fcbe17eb62ae" class="space-y-6">
+                        <div id="fa63525c-3f1e-48e5-a391-e459ef646238" class="flex">
+                            <div id="ce3e322c-1eb6-471e-91cd-48727c32710b" class="mr-4 h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-exclamation text-indigo-600"></i>
+                            </div>
+                            <div id="e394d792-e9d8-4b8f-9285-055da49bfd81">
+                                <h4 id="d34feb37-2cfa-46ec-adfe-e65640028404" class="font-bold mb-1">异常情况</h4>
+                                <p id="f0338be1-cfad-422a-8851-9b2c26b6f5ee" class="text-gray-700 text-sm">
+                                    用于处理真正的异常情况，而非常规错误检查。例如，文件无法打开、网络连接中断等不寻常的情况。
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div id="f1d7e94c-3455-4e0f-bd03-438c594f7dac" class="flex">
+                            <div id="f4269c23-5fb9-4a46-9cea-589675ebcf34" class="mr-4 h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-tools text-indigo-600"></i>
+                            </div>
+                            <div id="bbe8f3e4-85b0-46b2-97f5-5be6f63f9742">
+                                <h4 id="a78d0dc2-2431-492b-b1cc-71a749257850" class="font-bold mb-1">构造函数错误</h4>
+                                <p id="b5daeea4-b6cd-4afe-acb5-a3c1ce7b9d9c" class="text-gray-700 text-sm">
+                                    构造函数无法返回错误码，因此异常是处理构造函数中错误的最佳机制。
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div id="f887895c-ead9-4d31-9de4-34da51c58202" class="flex">
+                            <div id="aef5469b-ab69-443d-97b9-35275263f859" class="mr-4 h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-database text-indigo-600"></i>
+                            </div>
+                            <div id="dd6153e0-72ca-4a53-9faf-c01d5b332ace">
+                                <h4 id="cecca66b-1ea4-4755-8f4a-8e60de75892b" class="font-bold mb-1">资源获取失败</h4>
+                                <p id="c0daccce-c607-4e5c-96e7-7bc096c783c7" class="text-gray-700 text-sm">
+                                    当无法获取必要的资源（如内存、文件句柄、网络连接）时，抛出异常是合适的。
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div id="fa363843-c718-4155-a499-fa273e129c59" class="flex">
+                            <div id="ba175691-4f69-4785-b1cf-5b349d66f3c0" class="mr-4 h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                <i class="fas fa-project-diagram text-indigo-600"></i>
+                            </div>
+                            <div id="a9b7110a-f13d-42ee-8526-e07507d01b15">
+                                <h4 id="f7336c9f-df82-43c3-8739-9b1c511c5e8e" class="font-bold mb-1">跨多层传播错误</h4>
+                                <p id="c9524bd8-ff25-4b1d-8414-1a6251eea791" class="text-gray-700 text-sm">
+                                    当错误需要跨越多个函数调用层次传播时，异常比层层返回错误码更加优雅。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="d1e0dee6-1ad4-4c9b-8a02-581f6f7cc27a" class="md:col-span-6 p-6 rounded-xl primary-card">
+                    <h3 id="e9d558d6-a228-4d38-97e0-b13f9d8310bd" class="text-2xl font-bold mb-4">RAII原则</h3>
+                    <div id="e199a8f2-5ecc-41b9-8e77-cd2c0dc24a32" class="code-window">
+                        <div id="cd379534-840c-4910-bb88-ddd90f49266b" class="code-header">
+                            <div id="ae724204-0d82-4e54-95e0-c0756db9fe70" class="code-dot bg-red-400"></div>
+                            <div id="dfcaa8f3-95ae-48ba-9d1c-6292732bb318" class="code-dot bg-yellow-400"></div>
+                            <div id="c7658982-7c50-4164-838b-288ea5f1f0c7" class="code-dot bg-green-400"></div>
+                            <div id="a74154e4-45fb-44a9-b26a-e15a8353fce4" class="text-gray-400 text-xs ml-2 code-font">raii_example.cpp</div>
+                        </div>
+<pre><code class="language-cpp">#include &lt;fstream&gt;
+#include &lt;stdexcept&gt;
+#include &lt;memory&gt;
+
+class FileResource {
+private:
+    std::ifstream file;
+    
+public:
+    FileResource(const std::string& filename) : file(filename) {
+        if (!file) {
+            throw std::runtime_error("无法打开文件: " + filename);
+        }
+    }
+    
+    // 析构函数自动关闭文件
+    ~FileResource() {
+        if (file.is_open()) {
+            file.close();
+        }
+    }
+    
+    // 禁止复制
+    FileResource(const FileResource&) = delete;
+    FileResource& operator=(const FileResource&) = delete;
+    
+    // 读取文件内容
+    std::string readContent() {
+        std::string content;
+        std::string line;
+        while (std::getline(file, line)) {
+            content += line + '\n';
+        }
+        return content;
+    }
+};
+
+void processFile(const std::string& filename) {
+    FileResource resource(filename);  // RAII：资源获取即初始化
+    std::string content = resource.readContent();
+    
+    // 处理文件内容...
+    
+    // 文件会在函数结束或异常发生时自动关闭
+}</code></pre>
+                    </div>
+                    <p id="ed6975a7-2753-4cdd-ac23-d9f9faf3e369" class="mt-4 text-sm text-gray-600">
+                        <strong>RAII（Resource Acquisition Is Initialization）</strong>原则确保资源在获取时就与对象的生命周期绑定，当对象被销毁时（无论是正常退出作用域还是因异常而退出），资源会自动释放。
+                    </p>
+                </div>
+                
+                <div id="b67c5cd5-cf04-4c5e-9236-6e5a751f219c" class="md:col-span-12 p-8 rounded-xl secondary-card">
+                    <h3 id="f6a10afb-9b1b-4642-b210-f5bbf722bad6" class="text-3xl font-bold mb-6">异常处理的设计原则</h3>
+                    
+                    <div id="a3bbf535-49e3-436d-8de7-95e977b57905" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div id="e8ea8220-0eff-487c-b6b5-215567f14d3e" class="p-5 bg-white rounded-xl shadow-sm">
+                            <div id="c053e250-fd41-401f-a4dc-07d8f5c26a0c" class="flex items-center mb-4">
+                                <div id="bff9114a-e728-41ba-aabe-057ec0262aca" class="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center mr-3">
+                                    <i class="fas fa-balance-scale text-pink-600"></i>
+                                </div>
+                                <h4 id="fce3fae8-2ece-4ea0-b3d7-f3c906d57f25" class="font-bold">异常中立代码</h4>
+                            </div>
+                            <p id="f9edd03e-3839-4617-bc72-4c4f2cebe1b3" class="text-sm text-gray-700">
+                                函数应该传递它不处理的异常，但不应该改变异常的类型，除非有充分的理由。这使调用者能够处理原始异常。
+                            </p>
+                            <div id="df9c8c19-9b39-47f3-848e-86023863bf26" class="mt-4 p-3 bg-gray-50 rounded text-xs">
+<pre><code class="language-cpp">// 异常中立函数
+template &lt;class T&gt;
+void processData(T& data) {
+    // 不捕获不需要处理的异常
+    data.prepare();
+    data.process();
+    data.finalize();
+}</code></pre>
+                            </div>
+                        </div>
+                        
+                        <div id="da4603b5-d15c-4ea9-8399-0644b913dd44" class="p-5 bg-white rounded-xl shadow-sm">
+                            <div id="db02d3b8-9491-4531-84be-7361f0cf6b96" class="flex items-center mb-4">
+                                <div id="d7ca6361-ac65-426e-933c-122ef924b0c9" class="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center mr-3">
+                                    <i class="fas fa-skull-crossbones text-pink-600"></i>
+                                </div>
+                                <h4 id="e10673e3-f7c2-4bf9-a479-55d9bd80e8d1" class="font-bold">避免析构函数抛异常</h4>
+                            </div>
+                            <p id="e9ceb077-303d-4170-a89c-e50eb007903c" class="text-sm text-gray-700">
+                                析构函数在堆栈展开过程中可能被调用。如果此时再抛出异常，会导致程序调用<code>std::terminate()</code>终止。
+                            </p>
+                            <div id="e398f290-b760-4f60-b613-63d1e778dbf4" class="mt-4 p-3 bg-gray-50 rounded text-xs">
+<pre><code class="language-cpp">class Resource {
+public:
+    ~Resource() noexcept {  // 标记为noexcept
+        try {
+            // 可能抛出异常的清理代码
+            closeConnection();
+        }
+        catch (...) {
+            // 记录错误但不再抛出
+            logError("清理资源时发生错误");
+        }
+    }
+};</code></pre>
+                            </div>
+                        </div>
+                        
+                        <div id="efd3c4cb-bc94-46fa-9f7a-550e5e2c401b" class="p-5 bg-white rounded-xl shadow-sm">
+                            <div id="e7aae025-c99a-47bb-ac83-7a954fbe2e12" class="flex items-center mb-4">
+                                <div id="e79f4644-0fb0-4aba-84b7-791a6bcaae5c" class="h-10 w-10 rounded-full bg-pink-100 flex items-center justify-center mr-3">
+                                    <i class="fas fa-layer-group text-pink-600"></i>
+                                </div>
+                                <h4 id="ce545b10-d044-4e38-bae2-0e43f6bb98e6" class="font-bold">异常类层次结构</h4>
+                            </div>
+                            <p id="e8ba180e-ae3f-4803-8a06-073b21ab79f8" class="text-sm text-gray-700">
+                                设计良好的异常层次结构能帮助程序更精确地捕获和处理不同类型的错误。保持层次结构简单但有意义。
+                            </p>
+                            <div id="b2132402-ce26-456c-addd-30b826829974" class="mt-4 p-3 bg-gray-50 rounded text-xs">
+<pre><code class="language-cpp">class DatabaseError : public std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+class ConnectionError : public DatabaseError {
+    using DatabaseError::DatabaseError;
+};
+
+class QueryError : public DatabaseError {
+    using DatabaseError::DatabaseError;
+};</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="c5b87c88-0508-4a05-b9a5-dc5877b396c7" class="md:col-span-7 p-6 rounded-xl neutral-card">
+                    <h3 id="a1c25ab1-5f02-47c9-92e5-da29f51ddffe" class="text-2xl font-bold mb-4">现代C++中处理异常的推荐做法</h3>
+                    
+                    <div id="e20d15c0-ad92-4977-8c69-b19781b44f99" class="space-y-4">
+                        <div id="f34d0ad0-0089-4a09-a28a-d085b7447d29" class="flex items-start">
+                            <div id="d514e1c8-14e9-4b2b-94b9-97d5eab8d858" class="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center mt-0.5 mr-3 flex-shrink-0">
+                                <span id="cc385c75-f176-4ed5-8ac2-3918c9dcfdee" class="text-gray-700 font-bold">1</span>
+                            </div>
+                            <div id="cab7036a-40af-4c68-b9eb-402c75178be0">
+                                <h4 id="d724c623-d0c5-4e31-88a7-da592d1be226" class="font-bold">使用标准库异常类或自定义的派生异常类</h4>
+                                <p id="a19db873-d1f4-4c66-bea9-a924c6e77aa5" class="text-sm text-gray-700 mt-1">
+                                    利用标准库提供的异常类可以提高代码的可读性和可维护性。如需特殊的错误信息，可以派生自标准异常类。
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div id="c1a4b925-d1dc-479a-b67f-c725d53190c6" class="flex items-start">
+                            <div id="dd93c4ab-3a67-4205-be66-c100336151db" class="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center mt-0.5 mr-3 flex-shrink-0">
+                                <span id="b7e97590-8bfc-4458-89a3-f8fe9a051c33" class="text-gray-700 font-bold">2</span>
+                            </div>
+                            <div id="f8e3fe5b-b729-4e0b-baba-3475c165e528">
+                                <h4 id="f5606828-69e9-43c7-96bf-09519709cd45" class="font-bold">按引用捕获异常，避免对象切片</h4>
+                                <div id="d33ff838-d99c-4910-83ef-d91c9e468820" class="flex mt-2 space-x-4">
+                                    <div id="e905e912-b993-406e-88e8-b5ef0b6b2db2" class="flex-1">
+                                        <div id="b3ea60d7-17fb-4be9-a873-dc136d3ad0da" class="p-2 bg-red-50 rounded-lg">
+                                            <p id="ecea8878-b047-4b5e-baf7-70b8b76ab119" class="text-xs text-gray-700">不推荐</p>
+                                            <pre><code class="language-cpp">catch (std::exception e) { ... }</code></pre>
+                                        </div>
+                                    </div>
+                                    <div id="e55e6e59-5397-4daf-b522-ba0b7bd958d3" class="flex-1">
+                                        <div id="df21d846-cdfa-40e9-80ca-7b4c12223bbb" class="p-2 bg-green-50 rounded-lg">
+                                            <p id="ac09c2f2-c491-485e-a5d1-9f2df655eecb" class="text-xs text-gray-700">推荐</p>
+                                            <pre><code class="language-cpp">catch (const std::exception& e) { ... }</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="ef3568bb-7891-4ca2-9854-135f678f781c" class="flex items-start">
+                            <div id="c3f3eb0d-71a9-4d56-9629-21c2ad21c703" class="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center mt-0.5 mr-3 flex-shrink-0">
+                                <span id="bd149ffa-4f2a-4419-94fe-f5c08a1723b1" class="text-gray-700 font-bold">3</span>
+                            </div>
+                            <div id="a9453f95-b08d-436e-91e6-13c81c870451">
+                                <h4 id="e0af3d47-d7b5-4b3b-b0de-12878d97943c" class="font-bold">尽量使用noexcept标记不抛异常的函数</h4>
+                                <p id="e07af518-13d2-4b9e-ae13-de0df0c0362e" class="text-sm text-gray-700 mt-1">
+                                    为不会抛出异常的函数添加<code>noexcept</code>声明，可以帮助编译器进行优化，并在代码审查时明确函数的行为。
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div id="ace367c4-b939-4987-b5a5-dd45e326b8cb" class="flex items-start">
+                            <div id="dc6056db-884b-48b7-8197-0fae3e632359" class="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center mt-0.5 mr-3 flex-shrink-0">
+                                <span id="ca08d5d7-9332-4aa6-8c4b-bda39d6a7daa" class="text-gray-700 font-bold">4</span>
+                            </div>
+                            <div id="a761e010-79f1-4f29-8e2b-ce53dbde708c">
+                                <h4 id="a8f80880-d2ee-456d-898a-3cca28fa70e0" class="font-bold">使用智能指针管理动态分配的资源</h4>
+                                <p id="a07cae0a-b8c6-4b6b-905d-f3f7f7d9ebf0" class="text-sm text-gray-700 mt-1">
+                                    利用<code>std::unique_ptr</code>和<code>std::shared_ptr</code>自动管理动态资源，防止在异常发生时内存泄漏。
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div id="bbbcd4b8-cb56-4e18-a2ff-269c9bc6b3d5" class="flex items-start">
+                            <div id="e4a4648a-21ba-4811-a4c9-1869eb8aa578" class="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center mt-0.5 mr-3 flex-shrink-0">
+                                <span id="c9dcbb2c-7cce-4d71-89b6-f8899c1e5234" class="text-gray-700 font-bold">5</span>
+                            </div>
+                            <div id="c0b98cc8-1be5-49e5-aba9-b2b432ddb9c1">
+                                <h4 id="ad119db7-e777-4403-a5e7-9064ef164277" class="font-bold">不要过度使用异常</h4>
+                                <p id="de61da60-099a-468b-be17-c10bc40f9a77" class="text-sm text-gray-700 mt-1">
+                                    对于可预见的错误，如用户输入验证，使用错误码或返回<code>std::optional</code>/<code>std::expected</code>可能更合适。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="d9dcd4f2-fbce-4016-bbb2-f03a479061f6" class="md:col-span-5 p-6 rounded-xl accent-card">
+                    <h3 id="e2763d24-eba5-4b4c-8743-2ae0dd1e40d1" class="text-2xl font-bold mb-4">异常处理的对比</h3>
+                    <div id="exceptions-comparison-chart" class="h-64 mb-6"></div>
+                    
+                    <div id="ca1869b1-68c2-4270-89bd-4e2c04374618" class="bg-white p-4 rounded-lg">
+                        <h4 id="d2a613b8-9b5e-4928-af96-adaf690e14b5" class="font-bold mb-2">选择合适的错误处理机制</h4>
+                        <ul id="d9f94f42-3142-4056-8d06-c3c4ffd81041" class="space-y-2 text-sm">
+                            <li id="a36b0991-1c43-4321-a9e8-175bfad8c441" class="flex items-start">
+                                <i class="fas fa-check text-teal-500 mt-1 mr-2"></i>
+                                <span id="b83ea0f2-d17f-42b2-b119-ec458eba203a">异常处理：用于不可预期的错误和异常情况</span>
+                            </li>
+                            <li id="a76b910f-ab38-49bd-b043-50b5efae9ee0" class="flex items-start">
+                                <i class="fas fa-check text-teal-500 mt-1 mr-2"></i>
+                                <span id="becd1eac-6245-4c20-b3c0-f20676165b1c">错误码：用于频繁发生的错误和性能敏感的场景</span>
+                            </li>
+                            <li id="ba992a8c-5c07-458f-bef7-964aecbebd36" class="flex items-start">
+                                <i class="fas fa-check text-teal-500 mt-1 mr-2"></i>
+                                <span id="aea32393-5a7a-4f11-ab6c-221fe82e852e">断言：用于检测开发过程中的程序逻辑错误</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comparison Section -->
+    <section id="comparison" class="py-24 px-4 section-scroll">
+        <div id="e1c7cdb6-67b0-43ee-bd5f-893cbe177935" class="container mx-auto">
+            <div id="fbbb792d-664f-48b0-8ae8-a656f44f8911" class="mb-16 text-center">
+                <span id="ef745ff5-d1e3-473c-abe7-00aa8b56138c" class="text-lg font-medium text-indigo-600">第五章</span>
+                <h2 id="ccd194e2-df79-42f0-805d-08fd85ebacad" class="text-4xl md:text-5xl font-bold mt-2 mb-4">异常处理机制的比较</h2>
+                <p id="d4f661cc-d624-4bdb-807e-a08581ca0893" class="text-xl text-gray-600 max-w-3xl mx-auto">探讨C++异常处理与其他错误处理机制的异同</p>
+            </div>
+            
+            <div id="fc1647d3-bcf1-4071-bb91-cfc34246f1e1" class="bento-grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div id="ade19230-eef4-424d-bf1d-6cfb97c2f8f8" class="md:col-span-12 p-8 rounded-xl neutral-card">
+                    <h3 id="ef97abe2-34fd-417d-a0c4-e72a4e1ebb05" class="text-3xl font-bold mb-8 text-center">异常处理 vs 错误码 vs 断言</h3>
+                    
+                    <div id="a4743097-588f-4ecf-b491-af74a77e7626" class="overflow-x-auto">
+                        <table id="f0918f59-ff8e-4985-a44e-f752d475f28d" class="w-full">
+                            <thead id="c5c91aab-7338-4535-a999-8a0e7303e9ba">
+                                <tr id="c99e70cc-27dd-4288-aeb6-fffaa87744a5">
+                                    <th id="e4afd96e-63e8-4dda-adaa-ead8ab6d748a" class="p-4 text-left bg-gray-100 border-b-2 border-gray-200">特性</th>
+                                    <th id="e6ac32d0-fa62-4f47-adfd-d1ac985ca7b4" class="p-4 text-left bg-indigo-100 border-b-2 border-indigo-200">异常处理</th>
+                                    <th id="a66584ad-b4a6-45ed-8846-c3c63cae5280" class="p-4 text-left bg-pink-100 border-b-2 border-pink-200">错误码</th>
+                                    <th id="d8e96b5a-4ec6-411a-b95b-96016d959dd3" class="p-4 text-left bg-teal-100 border-b-2 border-teal-200">断言</th>
+                                </tr>
+                            </thead>
+                            <tbody id="c46023dc-a0d5-4c61-a353-2a34a09894e7">
+                                <tr id="b7e554c7-594d-4b15-a63d-f169b64c9d74">
+                                    <td id="c658f144-ceca-4e6f-a434-fa965ff53138" class="p-4 border-b border-gray-200 font-medium">用途</td>
+                                    <td id="db06b7fa-dc15-42bf-bbb0-73542b96005c" class="p-4 border-b border-gray-200">处理运行时异常情况</td>
+                                    <td id="be736535-a895-46be-94b9-821d31ad0fa1" class="p-4 border-b border-gray-200">处理预期的错误情况</td>
+                                    <td id="bdbfb251-04c6-41c0-98cb-967f640e88ca" class="p-4 border-b border-gray-200">捕获程序逻辑错误</td>
+                                </tr>
+                                <tr id="fb86f3ec-ba65-4330-94c2-d8cb0b473264">
+                                    <td id="b01ef776-68a5-4fd0-a6a0-cc4ef2a30b41" class="p-4 border-b border-gray-200 font-medium">代码分离</td>
+                                    <td id="df312d47-d9ea-4248-904c-c840111cc1b6" class="p-4 border-b border-gray-200">错误检测与处理代码分离</td>
+                                    <td id="c2531b4d-7e3b-4d69-94f3-94058c38aeeb" class="p-4 border-b border-gray-200">错误检测与处理代码混合</td>
+                                    <td id="b3c35982-abd9-422e-bf2d-4839f3043679" class="p-4 border-b border-gray-200">仅检测错误，不处理</td>
+                                </tr>
+                                <tr id="fc42182e-1171-4148-9db1-fcae9067932b">
+                                    <td id="b44a0f7c-b797-4f97-aa96-886c5f9e1a93" class="p-4 border-b border-gray-200 font-medium">错误传播</td>
+                                    <td id="d84b6716-c62e-46ba-b337-9da1eaf219ce" class="p-4 border-b border-gray-200">自动沿调用栈传播</td>
+                                    <td id="cf9255d4-a0b1-4ea0-af67-e73b7dc9f316" class="p-4 border-b border-gray-200">需要手动检查和传递</td>
+                                    <td id="aba91ab1-bf96-47ce-b8ca-f5d38a03a5ae" class="p-4 border-b border-gray-200">不传播（终止程序）</td>
+                                </tr>
+                                <tr id="b9de5b82-5086-42f6-a090-c38aff3dd9df">
+                                    <td id="d9c2c88e-7428-4d0d-9a5a-a2558a7cd17f" class="p-4 border-b border-gray-200 font-medium">忽略风险</td>
+                                    <td id="d987b2c1-0700-4541-901f-6fd23eabfd24" class="p-4 border-b border-gray-200">未捕获的异常终止程序</td>
+                                    <td id="e1c944bb-fc4d-4927-88d3-884805bdc492" class="p-4 border-b border-gray-200">可能被忽略</td>
+                                    <td id="df38d43e-fef6-4695-9f7f-ed88939729e6" class="p-4 border-b border-gray-200">不可忽略（触发即终止）</td>
+                                </tr>
+                                <tr id="a6da4b8e-bcd4-4311-86ce-4f92dbc3bb57">
+                                    <td id="b2fe639e-363b-4226-ae3f-e53b5bbefd0b" class="p-4 border-b border-gray-200 font-medium">性能开销</td>
+                                    <td id="cfd458ad-2f65-4f0e-9006-b9945c403c11" class="p-4 border-b border-gray-200">未抛出时低，抛出时高</td>
+                                    <td id="a61ce615-5eb7-417d-83f7-9e55ca4884dc" class="p-4 border-b border-gray-200">低且一致</td>
+                                    <td id="bcbeef8c-97cf-4ea0-9997-585cfd0df3a9" class="p-4 border-b border-gray-200">仅在调试版本有开销</td>
+                                </tr>
+                                <tr id="ce350695-3bce-4c6d-be7f-e1e19c2eeed7">
+                                    <td id="a1c337bf-9cff-4ed8-a089-3264ba6147cb" class="p-4 border-b border-gray-200 font-medium">适用场景</td>
+                                    <td id="e5afdaf8-09b0-4b0b-9dbf-1d56269aed67" class="p-4 border-b border-gray-200">异常情况，构造函数错误</td>
+                                    <td id="c03266c6-718e-47ee-a746-be36952c7ca8" class="p-4 border-b border-gray-200">频繁错误，性能敏感场景</td>
+                                    <td id="d6a2ff96-c1bd-4e09-aad3-22ca2a8187ef" class="p-4 border-b border-gray-200">开发调试阶段检查逻辑错误</td>
+                                </tr>
+                                <tr id="b44d283c-c6e5-4b11-b0ca-1d599b335717">
+                                    <td id="a0b79744-eecd-4b8b-9260-17104d9a8ea6" class="p-4 border-b border-gray-200 font-medium">错误信息</td>
+                                    <td id="ba2b0992-c43f-4edb-a4d6-566e97bffcf2" class="p-4 border-b border-gray-200">可传递详细的错误对象</td>
+                                    <td id="a0302ca0-3f59-4c2b-bece-6666ccf791ad" class="p-4 border-b border-gray-200">通常只能传递简单的数值</td>
+                                    <td id="e677a679-eddc-4158-a2e2-ec86a1adbe58" class="p-4 border-b border-gray-200">可包含描述性消息</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div id="ac2c451a-df9f-4213-9af2-32f6f5ce566c" class="md:col-span-7 p-6 rounded-xl primary-card">
+                    <h3 id="f8e25462-7a32-4a8c-aa87-7cc709530cf2" class="text-2xl font-bold mb-4">C++异常处理与Windows SEH异常的区别</h3>
+                    <p id="bb9abf77-3cb5-4296-bd68-bc395aa12ce9" class="mb-4">
+                        Windows操作系统提供了结构化异常处理(SEH)机制，与C++标准的异常处理机制有所不同：
+                    </p>
+                    
+                    <div id="e1b89d33-fc0f-4313-8ff5-8a50a5f0f9c6" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div id="a1b26538-ca10-4d5f-bb47-0b6cd69c93ca" class="p-4 bg-white rounded-lg border border-indigo-100">
+                            <h4 id="ff731508-e96f-47e8-998f-14ae7e3b6b60" class="font-bold mb-3">C++异常处理</h4>
+                            <ul id="ad8fd2cc-e64f-4910-91fe-56eb9ea0440e" class="list-disc ml-5 text-sm space-y-1">
+                                <li id="f9358e34-9b15-4ab8-b968-1b627f2cf685">使用try、catch和throw关键字</li>
+                                <li id="c742336f-fa23-4385-b4b4-7503e64ffbd8">基于类型的异常匹配</li>
+                                <li id="bce3144c-31e7-4afa-95b5-68f481168c39">跨平台，符合C++标准</li>
+                                <li id="c0c8d814-7660-482c-b134-3fb4776823e4">通常处理程序逻辑错误</li>
+                                <li id="d8de7cc4-0884-48fb-8ec0-437dd8961001">可以捕获用户定义的异常类型</li>
+                            </ul>
+                        </div>
+                        
+                        <div id="bcf3a5b3-e25f-4165-a12a-72f4392db4e5" class="p-4 bg-white rounded-lg border border-indigo-100">
+                            <h4 id="a146bc4a-3312-43c4-9681-0b2fd490fc46" class="font-bold mb-3">Windows SEH异常</h4>
+                            <ul id="a070518f-0172-4583-8ca2-46f4d1ebdf21" class="list-disc ml-5 text-sm space-y-1">
+                                <li id="ba361363-b345-4a3a-9a25-d5d2a6a4ce79">使用__try、__except和__finally关键字</li>
+                                <li id="bbdce6ef-590b-405c-a58b-7624854ae73d">基于异常代码的过滤器</li>
+                                <li id="c03c0ecf-06e7-4c67-bac4-85464a5fb4cb">仅限于Windows平台</li>
+                                <li id="a6d4c469-007e-4c84-979d-e900893643ff">可处理硬件异常（如访问冲突）</li>
+                                <li id="f14429df-8c75-493a-bec4-c78f3eecb949">可以混合使用__finally块确保清理</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div id="d3b8cb66-2c69-4021-a802-ccd48d0b049f" class="code-window">
+                        <div id="f6e67921-6671-401b-83d2-dfd8148aee6a" class="code-header">
+                            <div id="d56bbc28-2ecb-4f8d-8d10-be1e1a61cd43" class="code-dot bg-red-400"></div>
+                            <div id="bfc4f787-721b-4be2-87fe-367f7a3b806d" class="code-dot bg-yellow-400"></div>
+                            <div id="bb6f9abc-8b8e-4659-8e03-7ed7d803fce7" class="code-dot bg-green-400"></div>
+                            <div id="bd7c848e-2c1c-4cba-bcda-5c6ec9b2337c" class="text-gray-400 text-xs ml-2 code-font">seh_example.cpp</div>
+                        </div>
+<pre><code class="language-cpp">#include &lt;windows.h&gt;
+#include &lt;iostream&gt;
+
+// Windows SEH异常处理示例
+int main() {
+    __try {
+        // 可能导致异常的代码
+        int* p = nullptr;
+        *p = 42;  // 将触发访问冲突异常
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER) {
+        // 处理异常
+        std::cerr &lt;&lt; "捕获到SEH异常!" &lt;&lt; std::endl;
+    }
+    
+    std::cout &lt;&lt; "程序继续执行..." &lt;&lt; std::endl;
+    return 0;
+}</code></pre>
+                    </div>
+                </div>
+                
+                <div id="f642e6ac-9fae-4e08-a767-e36a27be20fb" class="md:col-span-5 p-6 rounded-xl secondary-card">
+                    <h3 id="e25ca7b0-748d-4223-9e3e-9794c7a923d7" class="text-2xl font-bold mb-4">编译器选项控制异常处理行为</h3>
+                    <p id="f5c41ccc-47bf-46e7-be01-726437772d12" class="mb-6">
+                        Microsoft Visual C++编译器提供了多种选项来控制异常处理的行为，特别是C++异常与SEH异常的交互：
+                    </p>
+                    
+                    <div id="b8cad17c-7caf-4c3e-aed3-785c3f8070a7" class="space-y-5">
+                        <div id="e7997780-6015-489a-91a0-9dff8fb2743c" class="p-4 bg-white rounded-lg shadow-sm">
+                            <div id="be0941fe-8806-47cf-b28b-2eda8f374bd1" class="flex items-center mb-2">
+                                <div id="f4b04efd-9138-461d-8653-4920e3704e1d" class="code-font bg-pink-100 text-pink-700 px-2 py-1 rounded mr-2">/EHs</div>
+                                <h4 id="a8d300b6-5380-41f3-9dbe-6af94c456ba4" class="font-bold">标准C++异常</h4>
+                            </div>
+                            <p id="ee306ebf-2436-410f-a7de-15212f8e66db" class="text-sm">
+                                C++异常处理程序不捕获SEH异常。这是最常用的选项，提供标准C++行为。
+                            </p>
+                        </div>
+                        
+                        <div id="d6584cb8-7807-478a-859a-a8689f51a68c" class="p-4 bg-white rounded-lg shadow-sm">
+                            <div id="fac8f1da-757c-420e-9c5d-169b038ac6e6" class="flex items-center mb-2">
+                                <div id="c1edfe58-ef93-48b8-a364-d19dcc43d4dd" class="code-font bg-pink-100 text-pink-700 px-2 py-1 rounded mr-2">/EHsc</div>
+                                <h4 id="ecaf549e-fd84-4ec2-9a3e-2eb6e5d531e4" class="font-bold">同步C++异常</h4>
+                            </div>
+                            <p id="c31658e9-e029-497d-8a40-deeea2ce60fa" class="text-sm">
+                                与/EHs类似，但通知编译器假设外部C函数不会抛出异常，允许更多优化。
+                            </p>
+                        </div>
+                        
+                        <div id="c5e1460e-fde6-4384-9cb1-6fd33cd3b198" class="p-4 bg-white rounded-lg shadow-sm">
+                            <div id="cee92e87-6a01-4bec-b6c5-b7e2ed51d8a9" class="flex items-center mb-2">
+                                <div id="d9dcfa93-ddd3-4303-b700-f85db4ae470c" class="code-font bg-pink-100 text-pink-700 px-2 py-1 rounded mr-2">/EHa</div>
+                                <h4 id="ef9ea421-3089-481d-8531-db27a7531bd8" class="font-bold">异步异常</h4>
+                            </div>
+                            <p id="e3f9bdaa-8767-4687-a404-94b26a0d53cc" class="text-sm">
+                                允许C++异常处理程序捕获SEH异常。这使C++代码能够处理像访问冲突这样的硬件异常。
+                            </p>
+                        </div>
+                        
+                        <div id="d2f12d99-91d7-40c1-a43e-ebe82a839ae6" class="mt-6 p-4 bg-pink-50 rounded-lg border border-pink-200">
+                            <h4 id="aca440b4-00eb-4280-af10-1bec8231dafc" class="font-bold mb-2">最佳实践</h4>
+                            <p id="adb840d5-9ee8-4c0f-8b55-6b99c4ca20dd" class="text-sm">
+                                在大多数C++项目中，推荐使用<code>/EHsc</code>选项。只有在需要在C++代码中处理系统级异常时，才考虑使用<code>/EHa</code>选项。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Summary Section -->
+    <section id="summary" class="py-24 px-4 bg-gradient-to-br from-indigo-50 to-white section-scroll">
+        <div id="d891c981-a3ef-4783-8852-26e08797b171" class="container mx-auto">
+            <div id="b1731456-9067-4c9d-9ce0-cd58bc5931d2" class="mb-16 text-center">
+                <span id="e9271d6a-9a60-4a3f-8de0-46442dc4c4a6" class="text-lg font-medium text-indigo-600">总结</span>
+                <h2 id="c1d2a670-8415-4c65-883e-315c4e26a546" class="text-4xl md:text-5xl font-bold mt-2 mb-4">C++异常处理机制总结</h2>
+                <p id="b124454c-0411-4a52-af27-4ad8581d8d9d" class="text-xl text-gray-600 max-w-3xl mx-auto">掌握异常处理，构建更稳健的C++程序</p>
+            </div>
+            
+            <div id="a01f382f-dbca-42ff-8c7f-c6a947684596" class="bento-grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div id="df0e919c-95e0-40c5-a77d-27a221a4cb98" class="md:col-span-8 p-8 rounded-xl neutral-card">
+                    <h3 id="a03218fb-8e85-4ae9-aa08-67168ae1d3aa" class="text-3xl font-bold mb-6">关键要点回顾</h3>
+                    
+                    <div id="e7d01fb6-6e18-410c-b57c-5a6470b87a6c" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div id="e27d232c-84b8-4c8e-89f9-39fc3551fda4" class="space-y-4">
+                            <div id="e728baa6-ed4d-421c-9ce4-72340f23c54d">
+                                <h4 id="f4e2953e-aed9-442d-aeff-99b881fd2d73" class="font-bold text-lg mb-2 flex items-center">
+                                    <span id="a4bc3740-7ab0-4655-9885-f3e251715237" class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center mr-2 text-indigo-700">1</span>
+                                    异常处理基础
+                                </h4>
+                                <p id="b9ccdd70-6e39-4562-a25e-4d1a80f208a2" class="text-gray-700">
+                                    C++异常处理机制提供了一种强大的方式来分离错误检测与处理代码，使程序更清晰、更健壮。通过try、catch和throw关键字，可以实现错误的检测、抛出和捕获。
+                                </p>
+                            </div>
+                            
+                            <div id="ac0fad2a-b2f5-48a6-a33f-07e14e65d9af">
+                                <h4 id="f47e9cff-1ce9-41c4-a6d7-fbe8691e8f3b" class="font-bold text-lg mb-2 flex items-center">
+                                    <span id="d05b5653-ea4f-46f3-b3b7-6fbd33f2bae0" class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center mr-2 text-indigo-700">2</span>
+                                    异常类层次结构
+                                </h4>
+                                <p id="c233400f-e3c3-4b62-ab5e-020d93a6d435" class="text-gray-700">
+                                    标准库提供了一套异常类，都派生自std::exception基类。创建自定义异常类时，最佳实践是从这些标准异常类派生，并重写what()方法提供有意义的错误信息。
+                                </p>
+                            </div>
+                            
+                            <div id="a6250862-1d53-4daf-abad-54f10bd56161">
+                                <h4 id="aa0cc7ba-2962-4532-9a9d-4e31d5481499" class="font-bold text-lg mb-2 flex items-center">
+                                    <span id="cb2fcf2a-e115-463e-9363-0e7e9dbce47e" class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center mr-2 text-indigo-700">3</span>
+                                    堆栈展开机制
+                                </h4>
+                                <p id="ad8d2a90-6962-445a-8cb0-f45642cc8c2d" class="text-gray-700">
+                                    当异常被抛出时，C++运行时系统会自动执行堆栈展开，调用所有局部对象的析构函数，这确保了即使在错误情况下资源也能被正确释放。
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div id="a3779c9b-9d4c-4a6d-8318-10d08c8956fd" class="space-y-4">
+                            <div id="eea046af-3e04-4e0c-959b-cf74ecca7155">
+                                <h4 id="e2ebe58f-de20-488d-81d5-e8a3146da4a8" class="font-bold text-lg mb-2 flex items-center">
+                                    <span id="b43b5598-bbbb-4fa3-893a-e6c1130e38ee" class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center mr-2 text-indigo-700">4</span>
+                                    RAII设计模式
+                                </h4>
+                                <p id="a9ffd219-493d-41c9-8bfa-f271e350b64e" class="text-gray-700">
+                                    结合RAII（资源获取即初始化）原则使用异常处理，可以创建异常安全的代码。将资源封装在对象中，利用对象的生命周期自动管理资源的获取和释放。
+                                </p>
+                            </div>
+                            
+                            <div id="dcf5befd-27f3-492e-a332-7abbb8f8c64e">
+                                <h4 id="f51805ed-a844-4e38-91ae-4281e5d58c7c" class="font-bold text-lg mb-2 flex items-center">
+                                    <span id="fe51a614-ed21-4b5c-8e78-44d29675b760" class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center mr-2 text-indigo-700">5</span>
+                                    noexcept规范
+                                </h4>
+                                <p id="afa3026d-d70d-435d-b87e-f3e28cf5685f" class="text-gray-700">
+                                    现代C++中，应使用noexcept关键字明确标记不抛出异常的函数，这不仅是一种声明，也是一种优化提示，让编译器生成更高效的代码。
+                                </p>
+                            </div>
+                            
+                            <div id="bb54a9f1-dca9-4e14-abd5-6dfb70ff461f">
+                                <h4 id="d1d9a161-b078-446b-bf16-c3e835150b88" class="font-bold text-lg mb-2 flex items-center">
+                                    <span id="c467f3e4-0c1e-4943-8255-d1a50e6be852" class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center mr-2 text-indigo-700">6</span>
+                                    选择合适的机制
+                                </h4>
+                                <p id="cb59f0f9-94dc-445a-9e54-a36572dc58fb" class="text-gray-700">
+                                    在实际项目中，需要根据具体情况选择异常处理、错误码或断言等不同机制。异常适合处理异常情况，错误码适合处理常见错误，断言适合捕获开发阶段的逻辑错误。
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="cfec2bfb-7fde-499a-be6a-33a36996bf69" class="mt-8 p-5 bg-indigo-50 rounded-lg border border-indigo-100">
+                        <h4 id="b5f9c5ef-4e35-4119-ba68-7e5e77966f0c" class="font-bold mb-3">持续学习和实践</h4>
+                        <p id="c5c95254-5b75-4695-b6b9-d264dac1be53">
+                            异常处理是C++中一个重要但复杂的主题。要真正掌握它，需要在实际项目中不断实践和总结经验。随着C++标准的发展，也要关注新的错误处理机制，如C++23中的<code>std::expected</code>。
+                        </p>
+                    </div>
+                </div>
+                
+                <div id="aed19b86-52ce-4727-b806-3b70af8492b1" class="md:col-span-4 p-6 rounded-xl accent-card">
+                    <h3 id="f22cd4f2-8ef4-4972-8be6-56c70ad0bf8c" class="text-2xl font-bold mb-4">进一步阅读</h3>
+                    
+                    <div id="afd05f9a-50cb-4655-87f8-afc13b44f47a" class="space-y-4">
+                        <div id="e4abe827-b2d5-419d-917c-354eee671177" class="p-4 bg-white rounded-lg shadow-sm">
+                            <h4 id="fca51442-b4c7-4e02-92bf-ee4f63c40dad" class="font-bold mb-2">书籍</h4>
+                            <ul id="e8af9bd9-d64c-4789-a4ef-3f234b9acf26" class="list-disc ml-5 text-sm space-y-1">
+                                <li id="adafa407-e488-4e1f-95a0-99169c49c91b">《Exceptional C++》 - Herb Sutter</li>
+                                <li id="e2464aa1-447b-42a2-9cba-40aa50e341b3">《C++ Coding Standards》 - Herb Sutter, Andrei Alexandrescu</li>
+                                <li id="c71a2fd1-c98b-4dbd-999e-c87f01be11d9">《Effective Modern C++》 - Scott Meyers</li>
+                            </ul>
+                        </div>
+                        
+                        <div id="b78c4758-80c7-4937-831a-b1b03c4f9365" class="p-4 bg-white rounded-lg shadow-sm">
+                            <h4 id="fe9bd081-b6de-491b-8bb7-1fced15f760b" class="font-bold mb-2">在线资源</h4>
+                            <ul id="a5b07051-89e8-4b33-9a7a-cf1c12f01dc2" class="list-disc ml-5 text-sm space-y-1">
+                                <li id="b545511d-99fe-4075-b47e-aac0029df191">C++ Reference - Exception Handling</li>
+                                <li id="feb18ae2-00d6-4a72-a04a-ce14c0e52b43">CPPCon 讲座视频</li>
+                                <li id="ed0f8363-b246-4573-979e-75132399af6d">ISO C++ 官方指南</li>
+                            </ul>
+                        </div>
+                        
+                        <div id="f181dff2-dfc2-452b-afea-0870d33f7bf9" class="p-4 bg-white rounded-lg shadow-sm">
+                            <h4 id="d8de12c3-86d7-4a26-982b-63a7bc473905" class="font-bold mb-2">相关话题</h4>
+                            <ul id="bc3425c9-308e-436e-9842-76ebc4b6b03c" class="list-disc ml-5 text-sm space-y-1">
+                                <li id="ab2c26f9-4dd7-4a20-8fbb-4c0367566f63">智能指针与资源管理</li>
+                                <li id="d5d0a952-3ae4-4e37-b650-9809dd5ed8ab">错误处理策略</li>
+                                <li id="b2bd9f07-cb17-4dce-9455-b5c9716f3e14">Contract Programming</li>
+                                <li id="eccfdd33-efac-47fa-882d-3a11348a0a39">C++23 std::expected</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer id="c2ad030e-c1fa-4482-a155-856c45b4c535" class="py-12 px-4 bg-gray-100">
+        <div id="ac25aaca-6fbc-463b-9a1b-3b187f06cdcf" class="container mx-auto">
+            <div id="e0b49763-474a-486c-8c6f-2cd2daee8a15" class="flex flex-col md:flex-row justify-between items-center">
+                <div id="d332a6a3-9c60-4659-a38b-c86f028f4c1c" class="mb-6 md:mb-0">
+                    <h3 id="b6f08947-617b-4325-9ec8-3f0a5d56e4e9" class="text-xl font-bold">C++ 异常处理机制</h3>
+                    <p id="ae4db2dc-5b4e-422a-84f4-46fdaa96f0a8" class="text-gray-600">全面指南 &copy; 2025</p>
+                </div>
+                
+                <div id="dcaa3ac7-1694-4c2c-a134-f00757533702" class="flex space-x-6">
+                    <a id="a2523ec1-d8e9-48cf-bd94-f11af43a8050" href="#" class="text-gray-600 hover:text-indigo-600 transition-colors">
+                        <i class="fab fa-github text-xl"></i>
+                    </a>
+                    <a id="eb12d0df-6c1c-4845-8682-43870bcef157" href="#" class="text-gray-600 hover:text-indigo-600 transition-colors">
+                        <i class="fab fa-linkedin text-xl"></i>
+                    </a>
+                    <a id="eed00a9c-2f0f-41f3-ac2e-cf5cc9f24ba9" href="#" class="text-gray-600 hover:text-indigo-600 transition-colors">
+                        <i class="fab fa-twitter text-xl"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <div id="c98f7487-e556-4b93-bad6-dd3ae8466032" class="mt-8 pt-8 border-t border-gray-200 text-center text-gray-500 text-sm">
+                使用 TailwindCSS 和 ECharts 构建。所有代码示例均采用 PrismJS 语法高亮显示。
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize charts when the DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Function to handle section visibility
+            function handleSectionVisibility() {
+                const sections = document.querySelectorAll('.section-scroll');
+                sections.forEach(section => {
+                    const sectionTop = section.getBoundingClientRect().top;
+                    const windowHeight = window.innerHeight;
+                    if (sectionTop < windowHeight * 0.75) {
+                        section.classList.add('section-visible');
+                    }
+                });
+            }
+            
+            // Handle navigation highlighting
+            function handleNavHighlight() {
+                const sections = document.querySelectorAll('section[id]');
+                let current = '';
+                
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop;
+                    if (window.scrollY >= sectionTop - 100) {
+                        current = section.getAttribute('id');
+                    }
+                });
+                
+                const navItems = document.querySelectorAll('.nav-item');
+                navItems.forEach(item => {
+                    item.classList.remove('text-indigo-600', 'font-medium');
+                    if (item.textContent.toLowerCase().includes(current)) {
+                        item.classList.add('text-indigo-600', 'font-medium');
+                    }
+                });
+            }
+            
+            // Handle sticky navigation
+            function handleStickyNav() {
+                const header = document.querySelector('header');
+                if (window.scrollY > 10) {
+                    header.classList.add('sticky-nav', 'shadow-sm');
+                } else {
+                    header.classList.remove('sticky-nav', 'shadow-sm');
+                }
+            }
+            
+            // Initialize charts
+            function initCharts() {
+                // Abnormal chart
+                const abnormalChart = echarts.init(document.getElementById('abnormal-chart'));
+                abnormalChart.setOption({
+                    title: {
+                        text: '错误处理方式比较',
+                        textStyle: {
+                            fontSize: 14,
+                            fontWeight: 'normal'
+                        },
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'shadow'
+                        }
+                    },
+                    legend: {
+                        data: ['异常处理', '错误码'],
+                        bottom: 0
+                    },
+                    grid: {
+                        left: '3%',
+                        right: '4%',
+                        top: '20%',
+                        bottom: '15%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: ['代码清晰度', '错误传播', '性能开销', '错误不可忽视'],
+                        axisLabel: {
+                            interval: 0,
+                            fontSize: 10
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        max: 5,
+                        axisLabel: {
+                            show: false
+                        }
+                    },
+                    series: [
+                        {
+                            name: '异常处理',
+                            type: 'bar',
+                            data: [4.5, 5, 3, 5],
+                            itemStyle: {
+                                color: '#6366f1'
+                            }
+                        },
+                        {
+                            name: '错误码',
+                            type: 'bar',
+                            data: [2.5, 2, 4.5, 2],
+                            itemStyle: {
+                                color: '#ec4899'
+                            }
+                        }
+                    ]
+                });
+
+                // Stack unwinding chart
+                const stackChart = echarts.init(document.getElementById('stack-unwinding-chart'));
+                stackChart.setOption({
+                    title: {
+                        text: '堆栈展开过程',
+                        textStyle: {
+                            fontSize: 14,
+                            fontWeight: 'normal'
+                        },
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: '{b}: {c}'
+                    },
+                    series: [
+                        {
+                            name: '调用栈',
+                            type: 'funnel',
+                            sort: 'none',
+                            left: '10%',
+                            top: 30,
+                            bottom: 10,
+                            width: '80%',
+                            minSize: '0%',
+                            maxSize: '100%',
+                            gap: 2,
+                            label: {
+                                show: true,
+                                position: 'inside',
+                                formatter: '{b}',
+                                fontSize: 11
+                            },
+                            itemStyle: {
+                                borderColor: '#fff',
+                                borderWidth: 1
+                            },
+                            emphasis: {
+                                label: {
+                                    fontSize: 12,
+                                    fontWeight: 'bold'
+                                }
+                            },
+                            data: [
+                                { value: 60, name: 'main()', itemStyle: { color: '#6366f1' } },
+                                { value: 50, name: 'processData()', itemStyle: { color: '#818cf8' } },
+                                { value: 40, name: 'readFile()', itemStyle: { color: '#a5b4fc' } },
+                                { value: 30, name: 'parse()', itemStyle: { color: '#c7d2fe' } },
+                                { value: 20, name: '异常抛出点!', itemStyle: { color: '#ec4899' } }
+                            ]
+                        }
+                    ]
+                });
+
+                // Exception comparison chart
+                const comparisonChart = echarts.init(document.getElementById('exceptions-comparison-chart'));
+                comparisonChart.setOption({
+                    radar: {
+                        indicator: [
+                            { name: '代码清晰度', max: 5 },
+                            { name: '使用简便性', max: 5 },
+                            { name: '性能开销', max: 5 },
+                            { name: '错误信息', max: 5 },
+                            { name: '错误传播', max: 5 }
+                        ],
+                        center: ['50%', '50%'],
+                        radius: '70%'
+                    },
+                    tooltip: {},
+                    legend: {
+                        data: ['异常处理', '错误码', '断言'],
+                        bottom: 0
+                    },
+                    series: [{
+                        name: '异常处理方式比较',
+                        type: 'radar',
+                        data: [
+                            {
+                                value: [5, 4, 2, 5, 5],
+                                name: '异常处理',
+                                symbol: 'circle',
+                                symbolSize: 6,
+                                lineStyle: {
+                                    width: 2,
+                                    color: '#6366f1'
+                                },
+                                areaStyle: {
+                                    color: 'rgba(99, 102, 241, 0.2)'
+                                },
+                                itemStyle: {
+                                    color: '#6366f1'
+                                }
+                            },
+                            {
+                                value: [2, 4, 5, 2, 2],
+                                name: '错误码',
+                                symbol: 'circle',
+                                symbolSize: 6,
+                                lineStyle: {
+                                    width: 2,
+                                    color: '#ec4899'
+                                },
+                                areaStyle: {
+                                    color: 'rgba(236, 72, 153, 0.2)'
+                                },
+                                itemStyle: {
+                                    color: '#ec4899'
+                                }
+                            },
+                            {
+                                value: [1, 5, 4, 3, 1],
+                                name: '断言',
+                                symbol: 'circle',
+                                symbolSize: 6,
+                                lineStyle: {
+                                    width: 2,
+                                    color: '#14b8a6'
+                                },
+                                areaStyle: {
+                                    color: 'rgba(20, 184, 166, 0.2)'
+                                },
+                                itemStyle: {
+                                    color: '#14b8a6'
+                                }
+                            }
+                        ]
+                    }]
+                });
+                
+                // Resize charts when window size changes
+                window.addEventListener('resize', function() {
+                    abnormalChart.resize();
+                    stackChart.resize();
+                    comparisonChart.resize();
+                });
+            }
+            
+            // Initialize everything
+            handleSectionVisibility();
+            handleNavHighlight();
+            handleStickyNav();
+            initCharts();
+            
+            // Add scroll event listeners
+            window.addEventListener('scroll', function() {
+                handleSectionVisibility();
+                handleNavHighlight();
+                handleStickyNav();
+            });
+            
+            // Navigation click handlers
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const target = item.textContent.toLowerCase();
+                    const sections = {
+                        '基础概念': 'fundamentals',
+                        '语法与用法': 'syntax',
+                        '高级特性': 'advanced',
+                        '最佳实践': 'best-practices'
+                    };
+                    
+                    if (sections[item.textContent]) {
+                        document.getElementById(sections[item.textContent]).scrollIntoView({ 
+                            behavior: 'smooth' 
+                        });
+                    }
+                });
+                
+                // Hover effect
+                item.addEventListener('mouseenter', function() {
+                    const navHighlight = document.querySelector('.nav-highlight');
+                    navHighlight.style.width = `${this.offsetWidth}px`;
+                    navHighlight.style.left = `${this.offsetLeft}px`;
+                });
+                
+                item.addEventListener('mouseleave', function() {
+                    const navHighlight = document.querySelector('.nav-highlight');
+                    navHighlight.style.width = '0';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
