@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis源码分析</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Framer Motion -->
+    <script src="https://cdn.jsdelivr.net/npm/framer-motion@10.12.4/dist/framer-motion.umd.min.js"></script>
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <!-- 代码高亮 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+        
+        :root {
+            --primary-color: #445566;
+            --accent-color: #E65D2E;
+            --highlight-color: #446B7C;
+            --light-color: #F5E6D3;
+            --bg-color: #E8F4F2;
+        }
+        
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background-color: #f8fafc;
+            overflow-x: hidden;
+        }
+        
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(90deg, var(--primary-color), var(--highlight-color));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .mega-text {
+            font-size: clamp(3rem, 10vw, 8rem);
+            line-height: 0.9;
+            font-weight: 900;
+        }
+        
+        .section-animation {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s cubic-bezier(0.17, 0.55, 0.55, 1);
+        }
+        
+        .section-animation.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .code-block {
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .gradient-card {
+            background: linear-gradient(135deg, rgba(68,85,102,0.05) 0%, rgba(68,107,124,0.1) 100%);
+            border-radius: 1rem;
+            transition: all 0.3s ease;
+        }
+        
+        .gradient-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px -5px rgba(68,85,102,0.1);
+        }
+        
+        .feature-card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px -5px rgba(68,85,102,0.15);
+        }
+        
+        .feature-icon {
+            background: linear-gradient(135deg, var(--accent-color), var(--accent-color) 70%, rgba(230,93,46,0.7));
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .section-title {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -0.5rem;
+            left: 0;
+            width: 60%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-color), rgba(230,93,46,0.3));
+            border-radius: 2px;
+        }
+        
+        .code-container {
+            position: relative;
+        }
+        
+        .code-language {
+            position: absolute;
+            top: 0.5rem;
+            right: 1rem;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.6);
+            font-family: monospace;
+        }
+        
+        /* 滚动进度条 */
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-color), var(--highlight-color));
+            transform-origin: 0%;
+            z-index: 1000;
+        }
+        
+        /* 表格样式 */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .comparison-table th {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1rem;
+            text-align: left;
+        }
+        
+        .comparison-table td {
+            padding: 1rem;
+            border-bottom: 1px solid rgba(68,85,102,0.1);
+        }
+        
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .comparison-table tr:nth-child(even) {
+            background-color: rgba(68,85,102,0.05);
+        }
+        
+        /* 动态渐变背景 */
+        .dynamic-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(230,93,46,0.05), rgba(68,107,124,0.02), transparent);
+            filter: blur(80px);
+            z-index: -1;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body class="relative">
+    <!-- 进度条 -->
+    <div class="progress-bar" id="progressBar"></div>
+    
+    <!-- 动态背景 -->
+    <div class="dynamic-bg"></div>
+    
+    <!-- 头部 Hero 区域 -->
+    <header class="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
+        <div class="container mx-auto max-w-6xl">
+            <div class="bento-grid">
+                <div class="col-span-12 md:col-span-8 mb-12">
+                    <h3 class="text-lg text-gray-600 mb-2">深入理解 <span class="text-accent font-semibold">Redis Source Code</span></h3>
+                    <h1 class="mega-text gradient-text mb-4">Redis<br>源码分析</h1>
+                    <p class="text-xl text-gray-700 max-w-2xl leading-relaxed">探索高性能内存数据库的内部实现机制，理解其设计哲学、数据结构与优化技术</p>
+                    <div class="mt-8 flex gap-4">
+                        <a href="#memory-allocator" class="px-6 py-3 bg-gradient-to-r from-[#445566] to-[#446B7C] text-white rounded-lg font-medium flex items-center gap-2 transition-transform transform hover:translate-y-[-2px]">
+                            <span class="material-icons">memory</span>
+                            开始探索
+                        </a>
+                        <a href="https://github.com/redis/redis" target="_blank" class="px-6 py-3 border border-gray-300 rounded-lg font-medium flex items-center gap-2 hover:bg-gray-50 transition-colors">
+                            <span class="material-icons">code</span>
+                            源码仓库
+                        </a>
+                    </div>
+                </div>
+                <div class="col-span-12 md:col-span-4 flex justify-center items-center">
+                    <div class="relative">
+                        <svg width="300" height="300" viewBox="0 0 300 300" class="animate-float">
+                            <path d="M150 20 L280 100 L280 200 L150 280 L20 200 L20 100 Z" fill="none" stroke="#445566" stroke-width="2"></path>
+                            <path d="M150 40 L240 100 L240 180 L150 240 L60 180 L60 100 Z" fill="none" stroke="#446B7C" stroke-width="2"></path>
+                            <path d="M150 60 L200 100 L200 160 L150 200 L100 160 L100 100 Z" fill="none" stroke="#E65D2E" stroke-width="2"></path>
+                            <circle cx="150" cy="60" r="5" fill="#445566"></circle>
+                            <circle cx="200" cy="100" r="5" fill="#445566"></circle>
+                            <circle cx="200" cy="160" r="5" fill="#445566"></circle>
+                            <circle cx="150" cy="200" r="5" fill="#445566"></circle>
+                            <circle cx="100" cy="160" r="5" fill="#445566"></circle>
+                            <circle cx="100" cy="100" r="5" fill="#445566"></circle>
+                        </svg>
+                        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
+                            <span class="text-[#E65D2E] font-bold text-4xl">Redis</span>
+                            <div class="text-sm text-gray-600">内存数据库</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 animate-bounce">
+            <span class="material-icons text-4xl text-gray-400">expand_more</span>
+        </div>
+    </header>
+    
+    <!-- 内存分配器 -->
+    <section id="memory-allocator" class="py-20 px-6 section-animation">
+        <div class="container mx-auto max-w-6xl">
+            <div class="bento-grid">
+                <div class="col-span-12 md:col-span-5">
+                    <h2 class="text-5xl font-bold mb-6 section-title">内存分配器</h2>
+                    <p class="text-lg text-gray-700 mb-4">Redis 支持多种内存分配器（allocator），通过精心设计的分配策略和封装，实现高效的内存管理。</p>
+                    <div class="flex items-center gap-4 my-8">
+                        <div class="feature-icon">
+                            <span class="material-icons text-3xl">memory</span>
+                        </div><div><h4 class="text-xl font-semibold">内存跟踪</h4>
+                            <p class="text-gray-600">精确统计所有内存使用</p>
+                        </div></div>
+                    <div class="flex items-center gap-4 my-8">
+                        <div class="feature-icon"><span class="material-icons text-3xl">tune</span>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold">内存对齐</h4>
+                            <p class="text-gray-600">提高内存访问效率</p>
+                        </div></div>
+                    <div class="flex items-center gap-4 my-8">
+                        <div class="feature-icon"><span class="material-icons text-3xl">security</span>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold">线程安全</h4>
+                            <p class="text-gray-600">原子操作保证数据一致性</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-span-12 md:col-span-7">
+                    <div class="gradient-card p-8"><h3 class="text-2xl font-bold mb-4">支持的分配器类型</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="feature-card p-6">
+                                <h4 class="text-xl font-bold mb-2">tcmalloc</h4>
+                                <p class="text-gray-600">由 Google 开发，用于优化 C++ 多线程应用</p>
+                                <div class="text-xs text-gray-400 mt-2">推荐版本 ≥ 1.6</div>
+                            </div>
+                            <div class="feature-card p-6">
+                                <h4 class="text-xl font-bold mb-2">jemalloc</h4>
+                                <p class="text-gray-600">最初用于 FreeBSD 系统，降低内存碎片化</p>
+                                <div class="text-xs text-gray-400 mt-2">推荐版本 ≥ 2.1</div>
+                            </div>
+                            <div class="feature-card p-6">
+                                <h4 class="text-xl font-bold mb-2">libc</h4>
+                                <p class="text-gray-600">标准 C 库中的内存分配函数</p>
+                                <div class="text-xs text-gray-400 mt-2">Redis 默认选择</div>
+                            </div>
+                        </div>
+                        
+                        <h3 class="text-2xl font-bold mt-8 mb-4">PREFIX_SIZE 内存前缀</h3>
+                        <div class="code-container code-block">
+                            <pre><code class="c">
+# ifdef HAVE_MALLOC_SIZE
+# define PREFIX_SIZE (0)
+# else
+# if defined(__sun) || defined(__sparc) || defined(__sparc__)
+# define PREFIX_SIZE (sizeof(long long))
+# else
+# define PREFIX_SIZE (sizeof(size_t))
+# endif
+# endif</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        
+                        <p class="mt-4 text-gray-700">这个前缀用于存储内存块大小信息，当使用的分配器没有提供获取内存大小的函数时使用。</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- zmalloc 和 zcalloc 函数 -->
+            <div class="mt-16">
+                <h3 class="text-3xl font-bold mb-6">zmalloc 和 zcalloc 函数</h3>
+                <div class="code-container code-block">
+                    <pre><code class="c">void *zmalloc(size_t size) {
+    void *ptr = malloc(size + PREFIX_SIZE);
+    if (!ptr) zmalloc_oom_handler(size);
+    
+# ifdef HAVE_MALLOC_SIZE
+    update_zmalloc_stat_alloc(zmalloc_size(ptr));
+    return ptr;
+# else
+    *((size_t*)ptr) = size;
+    update_zmalloc_stat_alloc(size + PREFIX_SIZE);
+    return (char*)ptr + PREFIX_SIZE;
+# endif
+}
+
+void *zcalloc(size_t size) {
+    void *ptr = calloc(1, size + PREFIX_SIZE);
+    if (!ptr) zmalloc_oom_handler(size);
+    
+# ifdef HAVE_MALLOC_SIZE
+    update_zmalloc_stat_alloc(zmalloc_size(ptr));
+    return ptr;
+# else
+    *((size_t*)ptr) = size;
+    update_zmalloc_stat_alloc(size + PREFIX_SIZE);
+    return (char*)ptr + PREFIX_SIZE;
+# endif
+}</code></pre>
+                    <div class="code-language">C</div>
+                </div>
+                
+                <div class="mt-8gradient-card p-8">
+                    <h4 class="text-2xl font-bold mb-4">Redis 内存管理的设计哲学</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="feature-card p-6">
+                            <h5 class="text-xl font-semibold mb-2">封装与统一</h5>
+                            <p class="text-gray-600">通过 zmalloc 系列函数封装不同系统的内存分配器，提供统一的接口</p>
+                        </div><div class="feature-card p-6">
+                            <h5 class="text-xl font-semibold mb-2">内存使用追踪</h5>
+                            <p class="text-gray-600">实时统计内存使用情况，便于监控和调优</p></div>
+                        <div class="feature-card p-6"><h5 class="text-xl font-semibold mb-2">内存对齐优化</h5>
+                            <p class="text-gray-600">考虑了不同系统的内存对齐要求，提高内存访问效率</p>
+                        </div><div class="feature-card p-6">
+                            <h5 class="text-xl font-semibold mb-2">异常处理机制</h5>
+                            <p class="text-gray-600">提供 OOM 处理机制，增强系统稳定性</p>
+                        </div></div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 数据库存储结构 -->
+    <section id="database-structure" class="py-20 px-6 bg-gray-50section-animation">
+        <div class="container mx-auto max-w-6xl">
+            <div class="text-center mb-16">
+                <h2 class="text-5xl font-bold mb-4inline-block section-title">Redis 数据库存储结构</h2>
+                <p class="text-xl text-gray-600 max-w-3xl mx-auto mt-6">Redis 的核心数据结构设计精巧，支持多种数据类型，实现高效的数据操作</p>
+            </div>
+            
+            <div class="mermaid-chart bg-white p-6 rounded-xl shadow-lg mb-12">
+                <!-- Redis存储结构图表将显示在这里 -->
+                <div class="text-center text-gray-400 text-sm mb-2">Redis 数据库存储结构示意图</div>
+                <div class="mermaid-container w-full h-[500px] overflow-auto flex justify-center">
+                    <div class="mermaid" id="redis-structure-chart">
+                        flowchart TD
+                            A[Redis服务器] --> B{触发条件}
+                            B -->|定时触发-save/bgsave| C[创建子进程]
+                            B -->|手动触发-save命令| D[阻塞主进程]
+                            C --> E[子进程创建RDB文件]
+                            D --> F[主进程创建RDB文件]
+                            E --> G[写入临时文件]
+                            F --> G
+                            G --> H[重命名替换旧文件]
+                            H --> I[完成RDB持久化]
+                    </div>
+                </div>
+            </div>
+        </div>
+            
+            <div class="bento-grid mt-16">
+                <div class="col-span-12 md:col-span-6">
+                    <h3 class="text-3xl font-bold mb-6">核心数据结构</h3>
+                    
+                    <div class="feature-card p-6 mb-6">
+                        <h4 class="text-2xl font-bold mb-2">redisServer与 redisDb</h4><div class="code-container code-block">
+                            <pre><code class="c">struct redisServer {
+    // 其他字段...
+    redisDb *db;// 数据库数组
+    int dbnum;         // 数据库数量
+    // 其他字段...
+};</code></pre><div class="code-language">C</div>
+                        </div>
+                        <p class="mt-4 text-gray-700">每个客户端连接可以通过 SELECT 命令选择数据库，默认使用索引为0的数据库。</p>
+                        <div class="code-container code-block mt-4">
+                            <pre><code class="c">typedef struct redisDb {
+    dict *dict;                // 键值对字典
+    dict *expires;              // 过期时间字典
+    dict *blocking_keys;        // 阻塞键
+    dict *ready_keys;           // 就绪键
+    dict *watched_keys;         // 被监视的键
+    int id;                     // 数据库ID
+    long long avg_ttl;          // 平均TTL统计
+    // Redis 6.0后新增的字段
+    unsigned long long expires_cursor; // 过期扫描游标
+    list *defrag_later;         // 延迟碎片整理列表
+} redisDb;</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6">
+                    <div class="feature-card p-6 mb-6">
+                        <h4 class="text-2xl font-bold mb-2">dict - 核心字典结构</h4>
+                        <div class="code-container code-block">
+                            <pre><code class="c">typedef struct dict {
+    dictType *type;  // 类型特定函数
+    void *privdata;  // 私有数据
+    dictht ht[2];    // 哈希表数组
+    long rehashidx;  // rehash索引
+    int16_t pauserehash; // rehash暂停标志
+} dict;
+
+typedef struct dictht {
+    dictEntry **table;  // 哈希表数组
+    unsigned long size; // 哈希表大小
+    unsigned long sizemask; // 哈希表大小掩码
+    unsigned long used; // 已使用节点数量
+} dictht;
+
+typedef struct dictEntry {
+    void *key;          // 键
+    union {
+        void *val;      // 值
+        uint64_t u64;   // 无符号64位整数
+        int64_t s64;    // 有符号64位整数
+        double d;       // 双精度浮点数
+    } v;
+    struct dictEntry *next; // 指向下一个哈希节点
+} dictEntry;</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div class="bg-gray-50 p-4 rounded">
+                                <div class="font-semibold mb-1">双哈希表设计</div>
+                                <div class="text-gray-600">一个用于当前使用，另一个用于rehash</div>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded">
+                                <div class="font-semibold mb-1">rehash机制</div>
+                                <div class="text-gray-600">渐进式重新散列，避免性能问题</div>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded">
+                                <div class="font-semibold mb-1">链地址法</div>
+                                <div class="text-gray-600">使用链表解决哈希冲突</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 mt-12">
+                    <div class="feature-card p-6">
+                        <h4 class="text-2xl font-bold mb-4">redisObject - 统一数据类型接口</h4>
+                        <div class="code-container code-block">
+                            <pre><code class="c">typedef struct redisObject {
+    unsigned type:4;      // 类型
+    unsigned encoding:4;  // 编码
+    unsigned lru:24;      // LRU信息
+    int refcount;         // 引用计数
+    void *ptr;            // 指向实际数据结构的指针
+} robj;
+
+// 对象类型定义
+# define OBJ_STRING 0  // 字符串
+# define OBJ_LIST 1    // 列表
+# define OBJ_SET 2     // 集合
+# define OBJ_ZSET 3    // 有序集合
+# define OBJ_HASH 4    // 哈希
+
+// 对象编码定义
+# define OBJ_ENCODING_RAW 0        // 原始编码
+# define OBJ_ENCODING_INT 1        // 整数编码
+# define OBJ_ENCODING_HT 2         // 哈希表编码
+# define OBJ_ENCODING_ZIPMAP 3     // 已废弃的编码
+# define OBJ_ENCODING_LINKEDLIST 4 // 双向链表编码
+# define OBJ_ENCODING_ZIPLIST 5    // 压缩列表编码
+# define OBJ_ENCODING_INTSET 6     // 整数集合编码
+# define OBJ_ENCODING_SKIPLIST 7   // 跳跃表编码
+# define OBJ_ENCODING_EMBSTR 8     // 嵌入式字符串编码
+# define OBJ_ENCODING_QUICKLIST 9  // 快速列表编码
+# define OBJ_ENCODING_STREAM 10    // 流编码</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        <p class="mt-4 text-gray-700">Redis使用redisObject对象来表示所有的键和值，根据实际需求选择最合适的数据结构，在保持接口一致的同时优化内存使用和访问效率。</p>
+                        
+                        <div class="mt-8">
+                            <h5 class="text-xl font-semibold mb-4">字符串对象的内部编码示例</h5>
+                            <div class="code-container code-block">
+                                <pre><code class="c">// 创建字符串对象的源码片段
+robj *createStringObject(const char *ptr, size_t len) {
+    if (len <= 44)
+        return createEmbeddedStringObject(ptr, len);
+    return createRawStringObject(ptr, len);
+}
+
+// 创建整数字符串对象
+robj *createStringObjectFromLongLong(long long value) {
+    robj *o;
+    if (value >= 0 && value < OBJ_SHARED_INTEGERS) {
+        // 使用共享对象池
+        incrRefCount(shared.integers[value]);
+        o = shared.integers[value];
+    } else {
+        if (value >= LONG_MIN && value <= LONG_MAX) {
+            o = createObject(OBJ_STRING, NULL);
+            o->encoding = OBJ_ENCODING_INT;
+            o->ptr = (void*)((long)value);
+        } else {
+            o = createStringObjectFromLongLongForValue(value);
+        }
+    }
+    return o;
+}</code></pre>
+                                <div class="code-language">C</div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                                <div class="feature-card p-4">
+                                    <h6 class="font-bold mb-2">int 编码</h6>
+                                    <p class="text-sm text-gray-600">当字符串可以解释为整数时使用</p>
+                                </div>
+                                <div class="feature-card p-4">
+                                    <h6 class="font-bold mb-2">embstr 编码</h6>
+                                    <p class="text-sm text-gray-600">当字符串长度小于等于44字节时使用的优化编码</p>
+                                </div>
+                                <div class="feature-card p-4">
+                                    <h6 class="font-bold mb-2">raw 编码</h6>
+                                    <p class="text-sm text-gray-600">当字符串长度大于44字节时使用的标准SDS编码</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 内存数据结构的存储优化 -->
+    <section id="memory-optimization" class="py-20 px-6 section-animation">
+        <div class="container mx-auto max-w-6xl">
+            <h2 class="text-5xl font-bold mb-6 section-title">内存数据结构的存储优化</h2>
+            <p class="text-xl text-gray-600 max-w-3xl mb-12">Redis 通过多种技术优化内存使用，平衡访问速度与内存占用</p>
+            
+            <div class="bento-grid">
+                <!-- 简单动态字符串(SDS) -->
+                <div class="col-span-12 md:col-span-6 lg:col-span-4">
+                    <div class="gradient-card h-full p-8">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="feature-icon">
+                                <span class="material-icons text-3xl">format_quote</span>
+                            </div>
+                            <h3 class="text-3xl font-bold">SDS</h3>
+                        </div>
+                        <h4 class="text-xl font-semibold mb-2">简单动态字符串</h4>
+                        <div class="code-container code-block">
+                            <pre><code class="c">struct __attribute__ ((__packed__)) sdshdr8 {
+    uint8_t len;        // 已使用长度
+    uint8_t alloc;      // 分配的总长度
+    unsigned char flags; // 标志位，3位低位表示类型
+    char buf[];         // 字符数组
+};</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        <div class="mt-6">
+                            <ul class="space-y-2">
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-green-500 text-sm">check_circle</span>
+                                    <span class="text-gray-700">常数时间获取字符串长度</span>
+                                </li>
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-green-500 text-sm">check_circle</span>
+                                    <span class="text-gray-700">空间预分配策略，减少内存重分配</span>
+                                </li>
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-green-500 text-sm">check_circle</span>
+                                    <span class="text-gray-700">二进制安全，不依赖'\0'结束符</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 压缩列表(ziplist) -->
+                <div class="col-span-12 md:col-span-6 lg:col-span-4">
+                    <div class="gradient-card h-full p-8">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="feature-icon">
+                                <span class="material-icons text-3xl">compress</span>
+                            </div>
+                            <h3 class="text-3xl font-bold">ziplist</h3>
+                        </div>
+                        <h4 class="text-xl font-semibold mb-2">压缩列表</h4>
+                        <div class="bg-gray-100 p-4 rounded-lg mb-4">
+                            <div class="text-sm text-gray-700 mb-2">ziplist总体结构:</div>
+                            <div class="font-mono text-sm">
+                                &lt;zlbytes&gt; &lt;zltail&gt; &lt;zllen&gt; &lt;entry&gt; ... &lt;zlend&gt;
+                            </div>
+                            <div class="text-sm text-gray-700 mt-2 mb-2">每个entry的结构:</div>
+                            <div class="font-mono text-sm">
+                                &lt;prevlen&gt; &lt;encoding&gt; &lt;entry-data&gt;
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6">
+                            <ul class="space-y-2">
+                                <li class="flex items-start gap-2">
+                                    <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                    <div>
+                                        <span class="text-gray-700 font-medium">prevlen</span>
+                                        <p class="text-sm text-gray-600">前一个节点的长度，用于逆向遍历</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                    <div>
+                                        <span class="text-gray-700 font-medium">encoding</span>
+                                        <p class="text-sm text-gray-600">编码类型和数据长度</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                    <div>
+                                        <span class="text-gray-700 font-medium">entry-data</span>
+                                        <p class="text-sm text-gray-600">实际数据内容</p>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 整数集合(intset) -->
+                <div class="col-span-12 md:col-span-6 lg:col-span-4">
+                    <div class="gradient-card h-full p-8">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="feature-icon">
+                                <span class="material-icons text-3xl">filter_1</span>
+                            </div>
+                            <h3 class="text-3xl font-bold">intset</h3>
+                        </div>
+                        <h4 class="text-xl font-semibold mb-2">整数集合</h4>
+                        <div class="code-container code-block">
+                            <pre><code class="c">typedef struct intset {
+    uint32_t encoding; // 编码方式
+    uint32_t length;   // 集合包含的元素数量
+    int8_t contents[]; // 保存元素的数组
+} intset;</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        <div class="mt-6">
+                            <ul class="space-y-2">
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-green-500 text-sm">check_circle</span>
+                                    <span class="text-gray-700">自动升级编码（如从int16升级到int32）</span>
+                                </li>
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-green-500 text-sm">check_circle</span>
+                                    <span class="text-gray-700">有序存储，便于二分查找</span>
+                                </li>
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-green-500 text-sm">check_circle</span>
+                                    <span class="text-gray-700">内存紧凑，没有额外元数据开销</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-12">
+                <div class="feature-card p-8">
+                    <h3 class="text-3xl font-semibold mb-6">自动编码选择</h3>
+                    <p class="text-lg text-gray-700 mb-6">Redis根据实际数据特点，自动选择最合适的内部编码方式：</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">哈希对象使用ziplist条件</h4>
+                            <ul class="space-y-3 text-gray-700">
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-[#E65D2E]">chevron_right</span>
+                                    所有键和值都小于64字节
+                                </li>
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-[#E65D2E]">chevron_right</span>
+                                    键值对数量小于512个
+                                </li>
+                            </ul>
+                            <div class="mt-4 bg-gray-50 p-4 rounded text-sm text-gray-600">
+                                可通过 hash-max-ziplist-value 和 hash-max-ziplist-entries 配置
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-xl font-semibold mb-4">列表对象使用ziplist条件</h4>
+                            <ul class="space-y-3 text-gray-700">
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-[#E65D2E]">chevron_right</span>
+                                    所有元素都小于64字节
+                                </li>
+                                <li class="flex items-center gap-2">
+                                    <span class="material-icons text-[#E65D2E]">chevron_right</span>
+                                    元素数量小于默认阈值
+                                </li>
+                            </ul>
+                            <div class="mt-4 bg-gray-50 p-4 rounded text-sm text-gray-600">
+                                可通过 list-max-ziplist-size 和 list-compress-depth 配置
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 过期时间管理 -->
+    <section id="expiration-management" class="py-20 px-6 bg-gray-50 section-animation">
+        <div class="container mx-auto max-w-6xl">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                <div>
+                    <div class="font-mono text-sm text-[#E65D2E]">redis/src/db.c</div>
+                    <h2 class="text-5xl font-bold mb-6 section-title">过期时间管理</h2>
+                    <p class="text-lg text-gray-700 mb-6">Redis通过专门的字典结构实现键的过期管理，结合多种策略删除过期键</p>
+                    
+                    <div class="code-container code-block mb-6">
+                        <pre><code class="c">// redisDb中的expires字典，键是指向原dict中的key指针，值是过期时间
+dict *expires;</code></pre>
+                        <div class="code-language">C</div>
+                    </div>
+                    
+                    <div class="gradient-card p-6 mt-8">
+                        <h4 class="text-xl font-semibold mb-4">过期键删除策略</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="feature-card p-4">
+                                <h6 class="font-bold text-center">惰性删除</h6>
+                                <div class="text-sm text-center text-gray-600 mt-2">在访问键时检查是否过期</div>
+                            </div>
+                            <div class="feature-card p-4">
+                                <h6 class="font-bold text-center">定期删除</h6>
+                                <div class="text-sm text-center text-gray-600 mt-2">周期性抽样检查过期键</div>
+                            </div>
+                            <div class="feature-card p-4">
+                                <h6 class="font-bold text-center">主动触发</h6>
+                                <div class="text-sm text-center text-gray-600 mt-2">内存不足时触发清理</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feature-card p-8">
+                    <h3 class="text-2xl font-bold mb-6">定期删除实现源码</h3>
+                    <div class="code-container code-block">
+                        <pre><code class="c">void activeExpireCycle(int type) {
+    // 定期扫描expires字典中的键
+    // 如果发现过期，则从主字典和expires字典中删除
+    // ...
+}</code></pre>
+                        <div class="code-language">C</div>
+                    </div>
+                    <p class="mt-4 text-gray-700">Redis使用定期删除机制平衡CPU使用与内存占用，避免一次性大量删除操作带来的性能问题。</p>
+                    <div class="mt-8 bg-gradient-to-r from-[#F5E6D3] to-[#E8F4F2] p-6 rounded-lg">
+                        <h5 class="text-lg font-semibold mb-2">工作原理</h5>
+                        <ol class="list-decimal list-inside space-y-2 text-gray-700">
+                            <li>Redis会周期性调用activeExpireCycle函数</li>
+                            <li>每次只检查一部分键（默认是20个keys/db）</li>
+                            <li>如果过期率超过25%，会继续检查</li>
+                            <li>单次执行时间有上限（默认25ms）</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 内存存储优化技术 -->
+    <section id="memory-optimization-tech" class="py-20 px-6 section-animation">
+        <div class="container mx-auto max-w-6xl">
+            <h2 class="text-5xl font-bold mb-6 section-title">内存存储优化技术</h2>
+            <p class="text-lg text-gray-700 mb-12">Redis采用多种技术优化内存使用效率，提高性能的同时降低资源消耗</p>
+            
+            <div class="bento-grid">
+                <!-- 共享对象池 -->
+                <div class="col-span-12 md:col-span-4">
+                    <div class="gradient-card h-full p-8">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="feature-icon">
+                                <span class="material-icons text-3xl">share</span>
+                            </div>
+                            <h3 class="text-3xl font-bold">共享对象池</h3>
+                        </div>
+                        
+                        <div class="code-container code-block">
+                            <pre><code class="c">// 在服务器初始化时创建共享对象
+void createSharedObjects(void) {
+    int j;
+    // 创建共享的整数对象，范围从0到OBJ_SHARED_INTEGERS-1
+    for (j = 0; j < OBJ_SHARED_INTEGERS; j++) {
+        shared.integers[j] = createObject(OBJ_STRING, (void*)(long)j);
+        shared.integers[j]->encoding = OBJ_ENCODING_INT;
+    }
+    // 其他共享对象...
+}</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        
+                        <p class="mt-4 text-gray-700">Redis预先创建一系列常用对象，通过引用计数机制实现共享，减少内存分配次数和内存占用。</p>
+                    </div>
+                </div>
+                
+                <!-- 多级编码转换 -->
+                <div class="col-span-12 md:col-span-4">
+                    <div class="gradient-card h-full p-8">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="feature-icon">
+                                <span class="material-icons text-3xl">upgrade</span>
+                            </div>
+                            <h3 class="text-3xl font-bold">多级编码转换</h3>
+                        </div>
+                        
+                        <div class="code-container code-block">
+                            <pre><code class="c">// 哈希对象编码升级的判断逻辑
+void hashTypeTryConversion(robj *o, robj **argv, int start, int end) {
+    int i;
+    size_t sum = 0;
+    
+    if (o->encoding != OBJ_ENCODING_ZIPLIST) return;
+    
+    for (i = start; i <= end; i++) {
+        if (!sdsEncodedObject(argv[i]))
+            continue;
+        size_t len = sdslen(argv[i]->ptr);
+        if (len > server.hash_max_ziplist_value) {
+            hashTypeConvert(o, OBJ_ENCODING_HT);
+            return;
+        }
+        sum += len;
+    }
+    if (sum > server.hash_max_ziplist_value)
+        hashTypeConvert(o, OBJ_ENCODING_HT);
+}</code></pre>
+                            <div class="code-language">C</div></div>
+                <p class="mt-4 text-gray-700">当数据特征发生变化时，Redis会自动转换内部编码方式，在空间和时间效率之间寻找最佳平衡点。</p></div>
+                </div>
+                
+                <!-- 内存淘汰策略 -->
+                <div class="col-span-12 md:col-span-4">
+                    <div class="gradient-card h-full p-8"><div class="flex items-center gap-4 mb-6">
+                            <div class="feature-icon">
+                                <span class="material-icons text-3xl">cleaning_services</span>
+                            </div>
+                            <h3 class="text-3xl font-bold">内存淘汰策略</h3>
+                        </div>
+                        
+                        <div class="code-container code-block mb-4">
+                            <pre><code class="c">int freeMemoryIfNeeded(void) {
+    // 判断是否需要释放内存
+    // 根据淘汰策略选择要删除的键
+    // 释放被选中键的内存
+    // ...
+}</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        
+                        <div class="mt-6 space-y-3 text-gray-700">
+                            <div class="p-2 bg-gray-50 rounded">
+                                <div class="font-semibold">volatile-lru</div>
+                                <div class="text-sm">从设置了过期时间的键中删除最久未使用的键</div>
+                            </div>
+                            <div class="p-2 bg-gray-50 rounded">
+                                <div class="font-semibold">allkeys-lru</div>
+                                <div class="text-sm">从所有键中删除最久未使用的键</div>
+                            </div>
+                            <div class="p-2 bg-gray-50 rounded">
+                                <div class="font-semibold">volatile-ttl</div>
+                                <div class="text-sm">从设置了过期时间的键中删除剩余时间最短的键</div>
+                            </div>
+                            <div class="p-2 bg-gray-50 rounded">
+                                <div class="font-semibold">no-eviction</div>
+                                <div class="text-sm">不删除键，在写操作时返回错误</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Redis渐进式rehash实现原理 -->
+    <section id="progressive-rehash" class="py-20 px-6 bg-gray-50 section-animation">
+        <div class="container mx-auto max-w-6xl">
+            <div class="text-center mb-16">
+                <div class="text-[#E65D2E] font-mono mb-2">dict.c</div>
+                <h2 class="text-5xl font-bold mb-4 inline-block section-title">渐进式rehash实现原理</h2>
+                <p class="text-xl text-gray-600 max-w-3xl mx-auto mt-6">Redis避免一次性rehash带来的性能抖动，采用渐进式重哈希技术分摊开销</p>
+            </div>
+            
+            <div class="bento-grid">
+                <div class="col-span-12 md:col-span-6">
+                    <div class="feature-card p-8">
+                        <h3 class="text-3xl font-bold mb-6">数据结构定义</h3>
+                        <div class="code-container code-block">
+                            <pre><code class="c">typedef struct dict {
+    dictType *type;   // 类型特定函数
+    void *privdata;   // 私有数据
+    dictht ht[2];     // 哈希表数组
+    long rehashidx;   // rehash进度，-1表示没有进行rehash
+    int16_t pauserehash; // rehash暂停标志
+} dict;</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        
+                        <div class="mt-8">
+                            <h4 class="text-xl font-bold mb-4">触发rehash的条件</h4>
+                            
+                            <div class="bg-gradient-to-r from-[#F5E6D3] to-[#E8F4F2] p-6 rounded-lg mb-6">
+                                <h5 class="text-lg font-semibold mb-2">扩容条件</h5>
+                                <ul class="list-disc list-inside space-y-2 text-gray-700">
+                                    <li>当<code>dict_can_resize</code>为真且负载因子 ≥ 1时</li>
+                                    <li>或者无论<code>dict_can_resize</code>的值，当负载因子 ≥ 5时</li>
+                                </ul>
+                                <div class="mt-4 text-sm text-gray-600 italic">
+                                    <span class="font-medium">注意：</span>在执行RDB生成或AOF重写时，<code>dict_can_resize</code>会被设置为0，禁止rehash
+                                </div>
+                            </div>
+                            
+                            <div class="bg-gradient-to-r from-[#F5E6D3] to-[#E8F4F2] p-6 rounded-lg"><h5 class="text-lg font-semibold mb-2">收缩条件</h5>
+                                <ul class="list-disc list-inside space-y-2 text-gray-700">
+                                    <li>当负载因子 < 0.1时，会触发收缩操作</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-12 md:col-span-6">
+                    <div class="feature-card p-8">
+                        <h3 class="text-3xl font-bold mb-6">触发rehash的源码</h3>
+                        
+                        <div class="code-container code-block">
+                            <pre><code class="c">// 扩容条件判断
+static int _dictExpandIfNeeded(dict *d) {
+    // 如果正在进行rehash，则直接返回DICT_OK
+    if (dictIsRehashing(d)) return DICT_OK;
+    
+    // 如果哈希表为空，则初始化为最小大小
+    if (d->ht[0].size == 0) return dictExpand(d, DICT_HT_INITIAL_SIZE);
+    
+    // 判断是否需要扩容
+    if (d->ht[0].used >= d->ht[0].size && 
+       (dict_can_resize || d->ht[0].used / d->ht[0].size > dict_force_resize_ratio)) {
+        // 扩容为原来的两倍
+        return dictExpand(d, d->ht[0].used * 2);
+    }
+    return DICT_OK;
+}
+
+// 收缩操作
+int dictResize(dict *d) {
+    unsigned long minimal;
+    
+    // 如果不能resize或正在进行rehash，则直接返回错误码
+    if (!dict_can_resize || dictIsRehashing(d)) return DICT_ERR;
+    
+    // 计算最小大小
+    minimal = d->ht[0].used;
+    if (minimal < DICT_HT_INITIAL_SIZE)
+        minimal = DICT_HT_INITIAL_SIZE;
+    
+    // 调整大小
+    return dictExpand(d, minimal);
+}</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        
+                        <div class="mt-12">
+                            <div class="feature-icon float-left mr-4">
+                                <span class="material-icons text-3xl">fact_check</span>
+                            </div>
+                            <div class="overflow-hidden">
+                                <h4 class="text-xl font-bold mb-1">负载因子计算</h4>
+                                <p class="text-gray-700">负载因子 = used / size</p>
+                            </div>
+                            <div class="clear-both mt-8">
+                                <ul class="space-y-2 text-gray-700">
+                                    <li class="flex items-center gap-2">
+                                        <span class="material-icons text-[#E65D2E] text-sm">arrow_right</span>
+                                        <span>used: 哈希表中已使用的节点数量</span>
+                                    </li>
+                                    <li class="flex items-center gap-2">
+                                        <span class="material-icons text-[#E65D2E] text-sm">arrow_right</span>
+                                        <span>size: 哈希表的大小（桶的数量）</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- dictRehash函数 -->
+                <div class="col-span-12 mt-12">
+                    <div class="feature-card p-8">
+                        <h3 class="text-3xl font-bold mb-6">dictRehash函数 - 渐进式rehash的核心</h3>
+                        <div class="code-container code-block">
+                            <pre><code class="c">int dictRehash(dict *d, int n) {
+    int empty_visits = n*10; // 允许访问的最大空桶数
+    if (!dictIsRehashing(d)) return 0; // 如果没有进行rehash，则直接返回
+    
+    while(n-- && d->ht[0].used != 0) { // 迁移n个元素或直到旧表为空
+        dictEntry *de, *nextde;
+        
+        // 跳过空桶
+        while(d->ht[0].table[d->rehashidx] == NULL) {
+            d->rehashidx++;
+            if (--empty_visits == 0) return 1; // 防止空桶太多导致循环过久
+        }
+        
+        // 获取当前rehashidx位置的条目
+        de = d->ht[0].table[d->rehashidx];
+        
+        // 迁移当前桶的所有元素
+        while(de) {
+            uint64_t h;
+            nextde = de->next; // 保存下一个元素
+            
+            // 计算新表中的位置
+            h = dictHashKey(d, de->key) & d->ht[1].sizemask;
+            
+            // 头插法插入到新表
+            de->next = d->ht[1].table[h];
+            d->ht[1].table[h] = de;
+            
+            // 更新计数
+            d->ht[0].used--;
+            d->ht[1].used++;
+            
+            de = nextde; // 处理下一个元素
+        }
+        
+        // 清空旧桶
+        d->ht[0].table[d->rehashidx] = NULL;
+        d->rehashidx++; // rehash索引递增
+    }
+    
+    // 检查是否完成全部rehash
+    if (d->ht[0].used == 0) {
+        free(d->ht[0].table); // 释放旧表空间
+        d->ht[0] = d->ht[1]; // ht[1]变为ht[0]
+        _dictReset(&d->ht[1]); // 重置ht[1]为空表
+        d->rehashidx = -1; // 表示rehash结束
+        return 0;
+    }
+    
+    // 返回1表示rehash未完成
+    return 1;
+}</code></pre>
+                            <div class="code-language">C</div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+                            <div class="gradient-card p-6">
+                                <h5 class="text-lg font-semibold mb-2">_dictRehashStep函数</h5>
+                                <div class="code-container code-block">
+                                    <pre><code class="c">static void _dictRehashStep(dict *d) {
+    if (d->iterators == 0) dictRehash(d, 1); // 如果没有迭代器，则rehash一步
+}</code></pre>
+                                    <div class="code-language">C</div>
+                                </div>
+                                <p class="mt-4 text-sm text-gray-600">每次字典操作时被调用，每次只rehash一个元素</p>
+                            </div>
+                            
+                            <div class="gradient-card p-6">
+                                <h5 class="text-lg font-semibold mb-2">定时rehash函数</h5>
+                                <div class="code-container code-block">
+                                    <pre><code class="c">int dictRehashMilliseconds(dict *d, int ms) {
+    long long start = timeInMilliseconds();
+    int rehashes = 0;
+    while(dictRehash(d,100)) {
+        rehashes += 100;
+        if (timeInMilliseconds()-start > ms) break;
+    }
+    return rehashes;
+}</code></pre>
+                                    <div class="code-language">C</div>
+                                </div>
+                                <p class="mt-4 text-sm text-gray-600">在给定时间内尽可能多地进行rehash操作</p>
+                            </div>
+                            
+                            <div class="gradient-card p-6">
+                                <h5 class="text-lg font-semibold mb-2">渐进式rehash步骤</h5>
+                                <ol class="list-decimal list-inside space-y-2 text-gray-700 text-sm">
+                                    <li>为ht[1]分配空间</li>
+                                    <li>将rehashidx设为0表示开始</li>
+                                    <li>每次操作时渐进搬迁元素</li>
+                                    <li>搬迁完成后释放ht[0]</li>
+                                    <li>将ht[1]变为ht[0]</li>
+                                    <li>重置ht[1]并将rehashidx设为-1</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Redis持久化原理 -->
+    <section id="persistence" class="py-20 px-6 section-animation">
+        <div class="container mx-auto max-w-6xl">
+            <div class="text-center mb-16">
+                <h2 class="text-5xl font-bold mb-4 inline-block section-title">Redis持久化原理</h2>
+                <p class="text-xl text-gray-600 max-w-3xl mx-auto mt-6">Redis提供了多种持久化机制，确保数据在重启后不丢失</p>
+            </div>
+            
+            <!-- RDB持久化 -->
+            <div class="mb-24">
+                <h3 class="text-4xl font-bold mb-8 flex items-center">
+                    <div class="feature-icon mr-4">
+                        <span class="material-icons text-3xl">save</span>
+                    </div>
+                    RDB持久化
+                </h3>
+                
+                <div class="mermaid-chart bg-white p-6 rounded-xl shadow-lg mb-12">
+                    <div class="text-center text-gray-400 text-sm mb-2">RDB持久化工作原理</div>
+                    <div class="mermaid-container w-full h-[500px] overflow-auto flex justify-center">
+                        <div class="mermaid" id="rdb-chart">
+                            flowchart TD
+                                A[Redis服务器] --> B{触发条件}
+                                B -->|定时触发-save/bgsave| C[创建子进程]
+                                B -->|手动触发-save命令| D[阻塞主进程]
+                                C --> E[子进程创建RDB文件]
+                                D --> F[主进程创建RDB文件]
+                                E --> G[写入临时文件]
+                                F --> G
+                                G --> H[重命名替换旧文件]
+                                H --> I[完成RDB持久化]
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bento-grid">
+                    <div class="col-span-12 md:col-span-6">
+                        <div class="feature-card p-8 h-full">
+                            <h4 class="text-2xl font-bold mb-4">RDB触发方式</h4>
+                            
+                            <div class="mb-6">
+                                <h5 class="text-xl font-semibold mb-2">自动触发</h5>
+                                <div class="code-container code-block">
+                                    <pre><code class="plaintext">save 900 1    # 900秒内至少有1个键被修改
+save 300 10   # 300秒内至少有10个键被修改
+save 60 10000 # 60秒内至少有10000个键被修改</code></pre>
+                                    <div class="code-language">配置</div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5 class="text-xl font-semibold mb-2">手动触发</h5>
+                                <ul class="space-y-2 text-gray-700">
+                                    <li class="flex items-center gap-2">
+                                        <span class="material-icons text-[#E65D2E] text-sm">terminal</span><div><div class="font-mono">save</div>
+                                            <p class="text-sm text-gray-600">阻塞Redis服务器进程直到完成</p>
+                                        </div>
+                                    </li>
+                <li class="flex items-center gap-2">
+                                        <span class="material-icons text-[#E65D2E] text-sm">terminal</span>
+                                        <div>
+                                            <div class="font-mono">bgsave</div>
+                                            <p class="text-sm text-gray-600">后台执行，不阻塞主进程</p>
+                                        </div>
+                                    </li>
+                                </ul>
+                                
+                                <h5 class="text-xl font-semibold mb-2 mt-6">其他触发场景</h5>
+                                <ul class="space-y-2 text-gray-700"><li class="flex items-center gap-2">
+                                        <span class="material-icons text-[#E65D2E] text-sm">chevron_right</span>
+                                        执行flushall命令时
+                                    </li>
+                                    <li class="flex items-center gap-2">
+                                        <span class="material-icons text-[#E65D2E] text-sm">chevron_right</span>
+                                        执行主从复制时
+                                    </li>
+                                </ul>
+                            </div></div>
+                    </div>
+                    <div class="col-span-12 md:col-span-6">
+                        <div class="feature-card p-8 h-full">
+                            <h4 class="text-2xl font-bold mb-4">RDB的优缺点</h4>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="gradient-card p-4">
+                                    <h5 class="text-lg font-semibold mb-2 text-[#445566]">优点</h5><ul class="space-y-2 text-gray-700"><li class="flex items-start gap-2"><span class="material-icons text-green-500 text-sm mt-1">check_circle</span><span>性能高效，平时不影响Redis性能</span></li><li class="flex items-start gap-2"><span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>文件紧凑，体积小，便于传输与备份</span></li><li class="flex items-start gap-2"><span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>恢复速度快，特别是对于大型数据集</span>
+                                        </li>
+                                <li class="flex items-start gap-2">
+                                            <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>适合做全量数据备份</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                <div class="gradient-card p-4">
+                                    <h5 class="text-lg font-semibold mb-2 text-[#E65D2E]">缺点</h5>
+                                    <ul class="space-y-2 text-gray-700">
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-red-500 text-sm mt-1">cancel</span>
+                                            <span>可能丢失最后一次快照后的数据</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-red-500 text-sm mt-1">cancel</span>
+                                            <span>fork操作可能导致服务暂时不可用</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-red-500 text-sm mt-1">cancel</span>
+                                            <span>不够实时，无法做到实时持久化</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- AOF持久化 -->
+            <div class="mb-24">
+                <h3 class="text-4xl font-bold mb-8 flex items-center">
+                    <div class="feature-icon mr-4">
+                        <span class="material-icons text-3xl">file_copy</span>
+                    </div>
+                    AOF持久化
+                </h3>
+                
+                <div class="mermaid-chart bg-white p-6 rounded-xl shadow-lg mb-12">
+                    <div class="text-center text-gray-400 text-sm mb-2">AOF持久化工作原理</div>
+                    <div class="mermaid-container w-full h-[500px] overflow-auto flex justify-center">
+                        <div class="mermaid" id="aof-chart">
+                            flowchart TD
+                                A[Redis服务器] --> B[接收写命令]
+                                B --> C[执行写命令]
+                                C --> D[命令追加到AOF缓冲区]
+                                D --> E{同步策略}
+                                E -->|always| F[每执行一个写命令后同步]
+                                E -->|everysec| G[每秒同步一次]
+                                E -->|no| H[由操作系统决定同步时机]
+                                F --> I[写入AOF文件]
+                                G --> I
+                                H --> I
+                                I --> J[文件过大触发重写]
+                                J --> K[AOF文件重写优化]
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bento-grid">
+                    <div class="col-span-12 md:col-span-6">
+                        <div class="feature-card p-8 h-full">
+                            <h4 class="text-2xl font-bold mb-4">AOF配置选项</h4>
+                            
+                            <div class="code-container code-block">
+                                <pre><code class="plaintext">appendonly yes  # 默认为no，设为yes启用AOF</code></pre>
+                                <div class="code-language">配置</div>
+                            </div>
+                            
+                            <div class="mt-6">
+                                <h5 class="text-xl font-semibold mb-2">同步策略（appendfsync）</h5>
+                                <div class="code-container code-block">
+                                    <pre><code class="plaintext">appendfsync always    # 每次写入都同步，最安全，也最慢
+appendfsync everysec  # 每秒同步一次，平衡安全性和性能，默认配置
+appendfsync no        # 操作系统决定何时同步，最快，但最不安全</code></pre>
+                                    <div class="code-language">配置</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-span-12 md:col-span-6">
+                        <div class="feature-card p-8 h-full">
+                            <h4 class="text-2xl font-bold mb-4">AOF重写机制</h4>
+                            
+                            <p class="text-gray-700 mb-6">为了解决AOF文件体积不断增大的问题，Redis提供了AOF重写机制：</p>
+                            
+                            <div class="mb-6">
+                                <h5 class="text-xl font-semibold mb-2">自动触发</h5>
+                                <div class="code-container code-block">
+                                    <pre><code class="plaintext">auto-aof-rewrite-percentage 100  # AOF文件增长百分比
+auto-aof-rewrite-min-size 64mb   # 最小重写大小</code></pre>
+                                    <div class="code-language">配置</div>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">当AOF文件大小超过上次重写后大小的100%且文件至少达到64MB时，会触发自动重写</p>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <h5 class="text-xl font-semibold mb-2">手动触发</h5>
+                                <div class="flex items-center gap-2">
+                                    <span class="material-icons text-[#E65D2E] text-sm">terminal</span>
+                                    <div class="font-mono">bgrewriteaof</div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <h5 class="text-xl font-semibold mb-2">重写原理</h5>
+                                <p class="text-gray-700">Redis创建一个子进程，遍历当前数据库中的所有键值对，直接生成命令追加到新的AOF文件中，而不是重放原AOF文件中的命令。</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-span-12 mt-8">
+                        <div class="feature-card p-8">
+                            <h4 class="text-2xl font-bold mb-4">AOF的优缺点</h4>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="gradient-card p-4">
+                                    <h5 class="text-lg font-semibold mb-2 text-[#445566]">优点</h5>
+                                    <ul class="space-y-2 text-gray-700">
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>数据安全性高，可以实现几乎不丢失数据</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>可读性强，纯文本格式，可以直接查看和修改</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>增量追加，不会破坏文件结构</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>自动重写机制控制文件大小</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="gradient-card p-4">
+                                    <h5 class="text-lg font-semibold mb-2 text-[#E65D2E]">缺点</h5>
+                                    <ul class="space-y-2 text-gray-700">
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-red-500 text-sm mt-1">cancel</span>
+                                            <span>文件体积大，相比RDB通常更大</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-red-500 text-sm mt-1">cancel</span>
+                                            <span>性能影响，特别是使用always同步策略时</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-red-500 text-sm mt-1">cancel</span>
+                                            <span>恢复速度慢，通常比RDB慢</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 混合持久化 -->
+            <div>
+                <h3 class="text-4xl font-bold mb-8 flex items-center">
+                    <div class="feature-icon mr-4">
+                        <span class="material-icons text-3xl">merge_type</span>
+                    </div>
+                    混合持久化
+                </h3>
+                
+                <div class="mermaid-chart bg-white p-6 rounded-xl shadow-lg mb-12">
+                    <div class="text-center text-gray-400 text-sm mb-2">混合持久化原理</div>
+                    <div class="mermaid-container w-full h-[500px] overflow-auto flex justify-center">
+                        <div class="mermaid" id="mixed-chart">
+                            flowchart TD
+                                A[触发AOF重写] --> B[创建子进程]
+                                B --> C[生成RDB数据]
+                                C --> D[写入AOF文件开头]
+                                D --> E[累积新的写命令]
+                                E --> F[以AOF格式追加到文件]
+                                F --> G[替换旧的AOF文件]
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bento-grid">
+                    <div class="col-span-12 md:col-span-6">
+                        <div class="feature-card p-8 h-full">
+                            <h4 class="text-2xl font-bold mb-4">混合持久化原理</h4>
+                            
+                            <p class="text-gray-700 mb-6">从Redis 4.0开始，Redis引入了混合持久化机制（RDB+AOF），结合了两种持久化方案的优点。</p>
+                            
+                            <div class="bg-gradient-to-r from-[#F5E6D3] to-[#E8F4F2] p-6 rounded-lg mb-6">
+                                <ol class="list-decimal list-inside space-y-2 text-gray-700">
+                                    <li>在AOF重写过程中，子进程先以RDB方式将现有内存数据序列化到新的AOF文件开头</li>
+                                    <li>然后将重写期间产生的增量命令以AOF方式追加到文件末尾</li>
+                                    <li>最终形成的文件前半部分是RDB格式，后半部分是AOF格式</li>
+                                </ol>
+                            </div>
+                            
+                            <div class="code-container code-block">
+                                <pre><code class="plaintext">aof-use-rdb-preamble yes  # 默认为no，设置为yes开启混合持久化</code></pre>
+                                <div class="code-language">配置</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-span-12 md:col-span-6">
+                        <div class="feature-card p-8 h-full">
+                            <h4 class="text-2xl font-bold mb-4">混合持久化的优缺点</h4>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="gradient-card p-4 h-full">
+                                    <h5 class="text-lg font-semibold mb-2 text-[#445566]">优点</h5>
+                                    <ul class="space-y-2 text-gray-700">
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>恢复速度快，RDB格式的开头部分可以快速加载大部分数据</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>数据安全性高，AOF格式的后半部分保证了最新命令不丢失</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-green-500 text-sm mt-1">check_circle</span>
+                                            <span>文件体积适中，比单纯的AOF文件小</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="gradient-card p-4 h-full">
+                                    <h5 class="text-lg font-semibold mb-2 text-[#E65D2E]">缺点</h5>
+                                    <ul class="space-y-2 text-gray-700">
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-red-500 text-sm mt-1">cancel</span>
+                                            <span>兼容性问题，低版本的Redis无法识别混合格式的AOF文件</span>
+                                        </li>
+                                        <li class="flex items-start gap-2">
+                                            <span class="material-icons text-red-500 text-sm mt-1">cancel</span>
+                                            <span>实现复杂性，设计更加复杂，对于开发者理解和定制化有一定难度</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 总结对比表格 -->
+                    <div class="col-span-12 mt-12">
+                        <div class="feature-card p-8">
+                            <h4 class="text-2xl font-bold mb-6 text-center">持久化方案对比</h4>
+                            <div class="overflow-x-auto">
+                                <table class="comparison-table">
+                                    <thead>
+                                        <tr>
+                                            <th>特性</th>
+                                            <th>RDB</th>
+                                            <th>AOF</th>
+                                            <th>混合持久化</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>数据安全性</td>
+                                            <td>低，可能丢失最后一次快照后的数据</td>
+                                            <td>高，根据同步策略可以做到几乎不丢数据</td>
+                                            <td>中等，兼顾两者优点</td>
+                                        </tr>
+                                        <tr>
+                                            <td>文件体积</td>
+                                            <td>小，二进制格式紧凑</td>
+                                            <td>大，记录所有写命令</td>
+                                            <td>中等，前部分RDB紧凑，后部分AOF命令</td>
+                                        </tr>
+                                        <tr>
+                                            <td>恢复速度</td>
+                                            <td>快</td>
+                                            <td>慢</td>
+                                            <td>较快</td>
+                                        </tr>
+                                        <tr>
+                                            <td>对性能影响</td>
+                                            <td>定时影响，平时几乎无影响</td>
+                                            <td>根据同步策略有不同程度影响</td>
+                                            <td>中等影响</td>
+                                        </tr>
+                                        <tr>
+                                            <td>实现复杂度</td>
+                                            <td>简单</td>
+                                            <td>中等</td>
+                                            <td>复杂</td>
+                                        </tr>
+                                        <tr>
+                                            <td>适用场景</td>
+                                            <td>备份，数据恢复速度要求高</td>
+                                            <td>数据安全性要求高</td>
+                                            <td>兼顾数据安全和恢复速度</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- 页脚 -->
+    <footer class="py-12 px-6 bg-gray-900 text-white">
+        <div class="container mx-auto max-w-6xl">
+            <div class="flex flex-col md:flex-row justify-between gap-8">
+                <div>
+                    <h3 class="text-2xl font-bold mb-4">Redis源码分析</h3>
+                    <p class="text-gray-400">深入理解Redis内部实现机制</p>
+                </div>
+                
+                <div>
+                    <h4 class="text-lg font-semibold mb-2">相关链接</h4>
+                    <ul class="space-y-2">
+                        <li><a href="https://github.com/redis/redis" class="text-gray-400 hover:text-white transition-colors">Redis源码</a></li>
+                        <li><a href="https://redis.io/documentation" class="text-gray-400 hover:text-white transition-colors">Redis官方文档</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-800 mt-8 pt-8 text-sm text-gray-500 text-center">
+                &copy; 2025 Redis源码分析. 本页面内容仅用于学习参考。
+            </div>
+        </div>
+    </footer>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script>
+        // 代码高亮
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('pre code').forEach(block => {
+                hljs.highlightElement(block);
+            });
+            
+            // 滚动检测和动画
+            const animatedSections = document.querySelectorAll('.section-animation');
+
+            // 初始化Mermaid
+            mermaid.initialize({
+                startOnLoad: true,
+                theme: 'default',
+                fontFamily: 'Inter, Noto Sans SC, sans-serif'
+            });
+            
+            const checkScroll = () => {
+                const triggerBottom = window.innerHeight * 0.8;
+                
+                animatedSections.forEach(section => {
+                    const sectionTop = section.getBoundingClientRect().top;
+                    if(sectionTop < triggerBottom) {
+                        section.classList.add('visible');
+                    }
+                });
+                
+                // 更新进度条
+                const scrollTop = window.scrollY;
+                const docHeight = document.body.offsetHeight;
+                const winHeight = window.innerHeight;
+                const scrollPercent = scrollTop / (docHeight - winHeight);
+                document.getElementById('progressBar').style.transform = `scaleX(${scrollPercent})`;
+            }
+            
+            window.addEventListener('scroll', checkScroll);
+            checkScroll(); // 初始检查
+            
+            // 加载图表
+            // document.getElementById('redis-structure-chart').innerHTML = document.querySelector('[id^="function_results"]').innerHTML;
+            // document.getElementById('rdb-chart').innerHTML = document.querySelectorAll('[id^="function_results"]')[1].innerHTML;
+            // document.getElementById('aof-chart').innerHTML = document.querySelectorAll('[id^="function_results"]')[2].innerHTML;
+            // document.getElementById('mixed-chart').innerHTML = document.querySelectorAll('[id^="function_results"]')[3].innerHTML;
+        });
+        
+        // 动态背景效果
+        document.addEventListener('mousemove', (e) => {
+            const dynamicBg = document.querySelector('.dynamic-bg');
+            const x = e.clientX / window.innerWidth;
+            const y = e.clientY / window.innerHeight;
+            
+            dynamicBg.style.background = `radial-gradient(circle at ${x * 100}% ${y * 100}%, rgba(230,93,46,0.05), rgba(68,107,124,0.02), transparent)`;
+        });
+    </script>
+</body>
+</html>
