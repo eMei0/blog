@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis数据组织方式</title>
+    <link href="https://fastly.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fastly.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap">
+    <script src="https://fastly.jsdelivr.net/npm/framer-motion@10.12.16/dist/framer-motion.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/echarts@5.4.2/dist/echarts.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://fastly.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+    <style>
+        :root {
+            --primary: #ff3b30;
+            --secondary: #5856d6;
+            --accent: #007aff;
+            --background: #f5f5f7;
+            --card-bg: #ffffff;
+            --text-primary: #1d1d1f;
+            --text-secondary: #86868b;
+        }
+        
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background-color: var(--background);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+        
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+        
+        .bento-card {
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+            overflow: hidden;
+            transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+        }
+        
+        .bento-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+        
+        .gradient-primary {
+            background: linear-gradient(120deg, var(--primary), rgba(255, 59, 48, 0.7));
+        }
+        
+        .gradient-secondary {
+            background: linear-gradient(120deg, var(--secondary), rgba(88, 86, 214, 0.7));
+        }
+        
+        .gradient-accent {
+            background: linear-gradient(120deg, var(--accent), rgba(0, 122, 255, 0.7));
+        }
+        
+        .mega-text {
+            font-size: clamp(3rem, 10vw, 12rem);
+            font-weight: 900;
+            line-height: 0.9;
+        }
+        
+        .section {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        
+        .section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        pre[class*="language-"] {
+            border-radius: 12px;
+            margin: 1.5em 0;
+        }
+        
+        code[class*="language-"] {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+        
+        .tech-border {
+            position: relative;
+        }
+        
+        .tech-border::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border: 2px solid transparent;
+            border-radius: inherit;
+            background-image: linear-gradient(120deg, var(--primary), var(--accent));
+            background-origin: border-box;
+            background-clip: border-box;
+            -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: destination-out;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        
+        /* Code syntax highlighting */
+        .token.comment,
+        .token.prolog,
+        .token.doctype,
+        .token.cdata {
+            color: #8292a2;
+        }
+        
+        .token.punctuation {
+            color: #f8f8f2;
+        }
+        
+        .token.property,
+        .token.tag,
+        .token.constant,
+        .token.symbol,
+        .token.deleted {
+            color: #f92672;
+        }
+        
+        .token.boolean,
+        .token.number {
+            color: #ae81ff;
+        }
+        
+        .token.selector,
+        .token.attr-name,
+        .token.string,
+        .token.char,
+        .token.builtin,
+        .token.inserted {
+            color: #a6e22e;
+        }
+        
+        .token.operator,
+        .token.entity,
+        .token.url,
+        .language-css .token.string,
+        .style .token.string,
+        .token.variable {
+            color: #f8f8f2;
+        }
+        
+        .token.atrule,
+        .token.attr-value,
+        .token.function,
+        .token.class-name {
+            color: #e6db74;
+        }
+        
+        .token.keyword {
+            color: #66d9ef;
+        }
+        
+        pre.language-bash .token.function {
+            color: #66d9ef;
+        }
+        
+        [data-prismjs-highlighted-line] {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid var(--accent);
+            padding-left: 10px;
+        }
+        
+        .scroll-indicator {
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-20px);
+            }
+            60% {
+                transform: translateY(-10px);
+            }
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <!-- Hero Section -->
+    <header id="e0fbbbe8-1e37-46a5-97dc-9e4f71ba5b2a" class="relative min-h-screen flex items-center justify-center overflow-hidden px-4 py-20">
+        <div id="fb726fd6-69cd-4b5d-9f76-20c5d12dbdce" class="container mx-auto max-w-7xl relative z-10">
+            <div id="f64c81f6-9f56-4536-a09e-ddc26da2f6da" class="text-center">
+                <div id="ce62a73e-9d58-4de5-9a56-98fd6881d5bc" class="mb-4 text-sm font-medium tracking-wider text-accent">
+                    <span id="cdd0b5f3-a0fb-4a7e-b0bd-1f2f0b4a2353" class="text-sm uppercase tracking-widest bg-accent/10 text-accent px-3 py-1 rounded-full">NoSQL Database</span>
+                </div>
+                <h1 id="f16edc90-df18-40e8-8b8d-b4d37b97c5ad" class="mega-text text-center font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent mb-6">
+                    Redis
+                </h1>
+                <p id="a6ecf6b6-25e6-4f8e-b13d-7ce8f5e7f6a0" class="text-2xl md:text-3xl mb-8 max-w-3xl mx-auto text-text-secondary">
+                    <span id="e5a5bfec-301e-409e-9bc0-9c8daefac4e7" class="font-bold text-text-primary">数据组织方式</span>
+                    <span id="ac518d5a-c8c6-4ed3-80a6-55d73d1f2de5" class="text-text-secondary"> · Data Organization</span>
+                </p>
+                <div id="ed2d5063-7e9d-42cc-8df0-d67e61195ce3" class="mt-12 scroll-indicator">
+                    <i id="c2fbf580-56d5-4752-b27e-8d9329db72e1" class="fas fa-chevron-down text-2xl opacity-60"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div id="d66c9723-b3c2-4de2-830c-ef9cfc67b0be" class="absolute inset-0 bg-gradient-to-b from-red-50 to-blue-50 opacity-50"></div>
+        <div id="b87ebe7f-8ff0-4e13-a29c-a20c3f92bb9e" class="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-gradient-to-r from-primary/30 to-primary/10 blur-3xl"></div>
+        <div id="e8ff7f8c-9b28-4daa-9089-c0c87c4c4f6e" class="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-gradient-to-r from-accent/30 to-accent/10 blur-3xl"></div>
+    </header>
+
+    <main id="b07e9ab8-da08-4ec5-8db4-97c46acd9f87" class="container mx-auto max-w-7xl px-4 pb-24">
+        <!-- Introduction Section -->
+        <section id="ba86b6e5-0fd2-4e14-a4d4-0a8e91ee3c03" class="section mb-24">
+            <div id="b6e87e97-f7c3-4d77-88dd-aa1064b9cc2e" class="bento-grid">
+                <div id="a8afd68b-bd57-4f72-9bea-3bf6dfda0c9b" class="bento-card col-span-12 md:col-span-7 p-10">
+                    <h2 id="bee8d09c-2b5d-47f9-8d0f-ce6eda47afae" class="text-3xl font-bold mb-6">Redis中的数据组织方式</h2>
+                    <p id="c9e2bdb1-3b85-4f58-a4ed-50ee4c0da84f" class="text-lg leading-relaxed">
+                        与传统的关系型数据库不同，Redis是一个键值(Key-Value)存储数据库，它没有"表"的概念。在Redis中，数据是通过不同类型的数据结构来存储和管理的。Redis作为NoSQL数据库，设计理念着重于高性能、内存操作和简单的数据结构，而非传统的表格模式。
+                    </p>
+                </div>
+                <div id="f1222732-13bb-42d9-9b60-b8293c85fde6" class="bento-card col-span-12 md:col-span-5 gradient-accent text-white p-10 flex items-center justify-center">
+                    <div id="f736f6d2-91a4-4bcf-9622-c2fca9afaa34" class="text-center">
+                        <div id="a31dc8d3-c52c-4ffa-81ee-7ca6dd773ea0" class="text-7xl md:text-9xl font-bold mb-4">NoSQL</div>
+                        <p id="b80a0fbc-40b5-4ea3-bb1c-e566851f3e0c" class="text-xl opacity-80">Key-Value Store Database</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Why Redis Doesn't Use Tables -->
+        <section id="cc5b8abd-7c05-4923-97c7-3f0be574b782" class="section mb-24">
+            <h2 id="d7da8a72-9df0-41ec-a1bc-be2e4c3d2ea5" class="text-4xl font-bold mb-12 text-center">Redis不使用表的原因</h2>
+            <div id="c98d87ee-1bef-459e-9c66-ecf89ac1e84a" class="bento-grid">
+                <div id="f7dcb99e-7bfb-4a8f-a1dd-ac1acf1c9e35" class="bento-card col-span-12 md:col-span-4 p-8 tech-border">
+                    <div id="e8c0c73a-3969-4ac9-ba23-3b5eaffb27e2" class="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+                        <i id="e6caa43a-0b2c-49e3-8826-bad5ecdac7e2" class="fas fa-bolt text-primary text-2xl"></i>
+                    </div>
+                    <h3 id="bb1ea70c-1e29-4db4-a18c-5f46adab84c3" class="text-xl font-bold mb-4">高性能设计</h3>
+                    <p id="ef0e3a19-b0a0-41c1-a0c1-0d9c9dbf50e2" class="text-text-secondary">Redis主要专注于高性能、内存操作和简单的数据结构，不受关系型数据库表结构的限制。</p>
+                </div>
+                <div id="a702e9f0-5a13-46b1-9c5d-20e71a9f2638" class="bento-card col-span-12 md:col-span-4 p-8 tech-border">
+                    <div id="ff99b9b0-b1d0-4c00-82e0-9b2f65ef3ad6" class="h-16 w-16 rounded-full bg-secondary/10 flex items-center justify-center mb-6">
+                        <i id="c4664bbe-a6fd-4e9c-9c19-76c8e08cd38a" class="fas fa-key text-secondary text-2xl"></i>
+                    </div>
+                    <h3 id="ef84bc19-f76a-426c-bb1c-9fe03ba2c05d" class="text-xl font-bold mb-4">键值对存储</h3>
+                    <p id="c3d33d87-1a84-489c-a1d7-f88bd4e1a98e" class="text-text-secondary">数据以键值对形式存储，每个键都是唯一的，允许快速查找和更新操作。</p>
+                </div>
+                <div id="d9456a41-1d08-49c8-ae0c-dcfeead7ad84" class="bento-card col-span-12 md:col-span-4 p-8 tech-border">
+                    <div id="c7cc2b2c-a81b-4b44-9968-ecc57aa2cf72" class="h-16 w-16 rounded-full bg-accent/10 flex items-center justify-center mb-6">
+                        <i id="a3a6c85b-82db-46c0-b3e0-f70f5ae304ea" class="fas fa-cubes text-accent text-2xl"></i>
+                    </div>
+                    <h3 id="d6d10ce5-1c83-4a03-9c36-e37a9b56a631" class="text-xl font-bold mb-4">多样化数据结构</h3>
+                    <p id="a6b45cc5-d5ef-4a6c-9f5b-6dea48db5c8a" class="text-text-secondary">提供了字符串、哈希、列表、集合和有序集合等多种数据结构，而不是表格式的行和列。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Structures Visualization -->
+        <section id="d49d7b42-f1a1-4290-aee4-e42ebdef6fbd" class="section mb-24">
+            <h2 id="a7e87ad2-fa16-445a-a1ec-3c5c55774f8c" class="text-4xl font-bold mb-12 text-center">Redis核心数据结构</h2>
+            <div id="redis-data-structures-chart" class="bento-card p-6 h-[400px] w-full"></div>
+        </section>
+
+        <!-- Simulating Tables Section -->
+        <section id="a3a24e9e-fac1-4d45-8d47-91c9e5f1a0a9" class="section mb-24">
+            <h2 id="b7ee33a5-e06b-4e8e-af59-53c4ee7b23da" class="text-4xl font-bold mb-12 text-center">
+                模拟<span id="d87af8af-bea8-4f26-b5fb-4bf97f2f6ab2" class="text-primary">"表"</span>的方法
+            </h2>
+            <div id="a90b34fd-6b6c-488b-bd3e-1f8a6df62d03" class="bento-grid">
+                <div id="c5f0dec7-b8f6-4bee-82f5-05efe2e1b41c" class="bento-card col-span-12 gradient-primary text-white p-10">
+                    <div id="fa42f59a-3cf7-46df-a0dd-74cc5de8b2f6" class="mb-6">
+                        <span id="a6ee3fe2-8ddb-4cf4-805c-6eac1f35c9d1" class="text-xl uppercase tracking-widest opacity-80">使用哈希(Hash)结构</span>
+                    </div>
+                    <h3 id="aec32a9c-d7c4-4151-87a1-f7d9fe1c60e5" class="text-5xl md:text-7xl font-bold mb-6">对象映射</h3>
+                    <p id="e2a4e5f4-aea5-4c1d-ad9c-1e6e1d7be8e9" class="text-xl opacity-90 mb-6">哈希结构非常适合存储对象，可以模拟表中的一行数据。</p>
+                    
+                    <pre id="f9a96850-f6c7-4b9e-81d0-f7ced62cd4fd"><code class="language-bash"># 存储用户ID为1001的信息
+HSET user:1001 name "张三"
+HSET user:1001 age 25
+HSET user:1001 email "zhangsan@example.com"
+
+# 或者一次设置多个字段
+HMSET user:1001 name "张三" age 25 email "zhangsan@example.com"
+
+# 获取用户信息
+HGETALL user:1001</code></pre>
+                </div>
+                
+                <div id="fb6b76f0-7c8e-4c8d-b4c2-12a62c09d3fa" class="bento-card col-span-12 md:col-span-6 gradient-secondary text-white p-10">
+                    <div id="daf2fba4-6e04-4761-9e7e-ce2ca7a70b81" class="mb-6">
+                        <span id="e54d3c8d-c3d5-4f37-8a8b-a8d3b825ed01" class="text-xl uppercase tracking-widest opacity-80">使用有序集合(Sorted Set)</span>
+                    </div>
+                    <h3 id="c3b9f19d-c2c5-490b-a81d-bb9c0aaa8b89" class="text-4xl md:text-5xl font-bold mb-6">排序数据</h3>
+                    <pre id="f6ca3c33-2a05-4c35-8eb4-3c7bb1c67e29"><code class="language-bash"># 存储用户积分排行榜
+ZADD leaderboard 100 "user:1001"
+ZADD leaderboard 85 "user:1002"
+ZADD leaderboard 95 "user:1003"
+
+# 获取前10名用户
+ZREVRANGE leaderboard 0 9 WITHSCORES</code></pre>
+                </div>
+                
+                <div id="efbdd2bc-4ea4-4a33-8f8e-77c2ae9e064a" class="bento-card col-span-12 md:col-span-6 gradient-accent text-white p-10">
+                    <div id="fa64df81-ebbb-4a30-9cd7-3f22e347e11d" class="mb-6">
+                        <span id="f77cedd6-8cb4-41b5-9a4b-c59dbdc8e42a" class="text-xl uppercase tracking-widest opacity-80">使用集合(Set)实现关系</span>
+                    </div>
+                    <h3 id="e6c72e99-57fd-477d-8dd3-28d34fad9b20" class="text-4xl md:text-5xl font-bold mb-6">多对多关系</h3>
+                    <pre id="a4c1c1d4-4bdf-4e7c-b5ad-0a5ebf0e5c10"><code class="language-bash"># 用户1001关注的用户
+SADD following:1001 1002 1003 1004
+
+# 用户1001的粉丝
+SADD followers:1001 1005 1006
+
+# 检查用户1002是否被1001关注
+SISMEMBER following:1001 1002</code></pre>
+                </div>
+                
+                <div id="c76c3aa2-1a07-4e35-8bae-f41c2e25cfac" class="bento-card col-span-12 p-10">
+                    <div id="e3d1c5ec-e40d-4991-a6d4-e3ce9caee0e3" class="mb-6">
+                        <span id="dfed499c-b6d9-437c-8f2a-a2b7a3343cd0" class="text-xl uppercase tracking-widest text-accent">使用列表(List)存储时间序列数据</span>
+                    </div>
+                    <h3 id="ef97682e-f099-47c9-a71e-cd10d7e90d0b" class="text-4xl md:text-5xl font-bold mb-6">队列数据</h3>
+                    <pre id="f6c67649-6f59-4ed0-b14d-acd62a61bdcf"><code class="language-bash"># 存储用户的最近活动
+LPUSH activities:1001 "登录系统" "更新头像" "发布文章"
+
+# 获取最近5条活动
+LRANGE activities:1001 0 4</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data Structure Selection Guide -->
+        <section id="a0a52e43-8db2-4b8e-b65a-baa28c81e77b" class="section mb-24">
+            <h2 id="f29de9dc-f6bd-462d-97f8-b12c2ee4c21f" class="text-4xl font-bold mb-12 text-center">Redis数据结构的选择指南</h2>
+            <div id="redis-structure-selection-chart" class="bento-card p-6 h-[400px] w-full"></div>
+        </section>
+
+        <!-- Best Practices Section -->
+        <section id="b4fe2bde-9a23-482e-87df-aad3a5efaea4" class="section mb-24">
+            <h2 id="d9a5dfed-e58b-49b0-888c-e3c6ddc00f95" class="text-4xl font-bold mb-12 text-center">
+                模拟关系数据库表的<span id="cf1aafe8-25fc-482e-8c08-8bed05f34a5d" class="text-primary">最佳实践</span>
+            </h2>
+            
+            <div id="b9d0272a-3ead-4e04-a1a1-e95e8be5fde8" class="bento-grid">
+                <div id="e1bea0b2-7b17-4f5a-89fe-9a6b0dbc9e17" class="bento-card col-span-12 md:col-span-6 p-10">
+                    <h3 id="fa5a4adb-69a5-4a20-96ba-89aa2eae673c" class="text-2xl font-bold mb-6">1. 定义键命名规范</h3>
+                    <p id="d1b3db4c-af05-4bb1-a3f4-eb75dd5a5a64" class="text-lg mb-4">使用一致的键命名规范非常重要：</p>
+                    <pre id="bb2e0c53-f30a-4bc7-9659-71be6eb0b3af"><code class="language-bash"># 对象类型:ID:属性
+user:1001:name
+user:1001:email
+user:1001:profile
+
+# 或使用哈希结构
+user:1001 -> (哈希表包含所有用户属性)</code></pre>
+                </div>
+                
+                <div id="d775f887-97b8-42c2-a06e-1bbc1f2b00e1" class="bento-card col-span-12 md:col-span-6 p-10">
+                    <h3 id="d4dd4629-eac8-443f-a04a-c3b85fc40f42" class="text-2xl font-bold mb-6">2. 使用哈希存储"表行"</h3>
+                    <pre id="f5a9cc31-eb60-4ed0-85ec-2e3c11e31b1b"><code class="language-bash"># 创建多个"用户记录"
+HMSET user:1001 name "张三" age 25 status "active"
+HMSET user:1002 name "李四" age 32 status "inactive"
+HMSET user:1003 name "王五" age 28 status "active"
+
+# 创建索引以方便查询
+SADD users:active 1001 1003
+SADD users:by-age:20-30 1001 1003
+SADD users:by-age:30-40 1002</code></pre>
+                </div>
+                
+                <div id="c6c41c10-5e0c-4f11-abea-01264a631f29" class="bento-card col-span-12 md:col-span-6 p-10">
+                    <h3 id="afabce6c-d72c-4a37-9f49-db1d66d31ed6" class="text-2xl font-bold mb-6">3. 保存自增ID</h3>
+                    <pre id="b86fe89c-b2a1-47b1-b4c2-56ed8e5580fa"><code class="language-bash"># 获取新的用户ID
+INCR next_user_id
+
+# 使用生成的ID创建新用户
+HMSET user:{上一步的结果} name "赵六" age 35 status "active"</code></pre>
+                </div>
+                
+                <div id="cf56fb20-6eb2-43f2-9c36-f204e9e2adce" class="bento-card col-span-12 md:col-span-6 p-10">
+                    <h3 id="a532d923-7d6e-4f1f-b0f8-7db02e37fbc2" class="text-2xl font-bold mb-6">4. 实现"外键"关系</h3>
+                    <pre id="de532fa1-2818-4c5e-ab1b-1f9dfb975ba7"><code class="language-bash"># 文章与评论的关系
+HMSET article:5001 title "Redis入门" author_id 1001 content "这是文章内容..."
+
+# 添加评论，使用文章ID作为前缀
+HMSET comment:5001:1 user_id 1002 content "好文章!"
+HMSET comment:5001:2 user_id 1003 content "学习了!"
+
+# 存储文章的评论ID列表
+LPUSH article:5001:comments 1 2</code></pre>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Data Querying and Indexing -->
+        <section id="bf7e1387-0c04-492c-8de8-ddddc05232d5" class="section mb-24">
+            <h2 id="d7fa5b13-e3fb-4f45-abdc-a77ac95a6cca" class="text-4xl font-bold mb-12 text-center">数据查询与索引</h2>
+            <div id="c5e6d4a3-7613-4a5d-be1a-a3c0c04cdd35" class="bento-card p-10">
+                <p id="c40e9851-1aaa-4c7d-bb04-b301c15c1ae8" class="text-lg mb-6">在Redis中实现"表查询"需要提前设计好索引：</p>
+                <pre id="eef93977-21c6-4d72-a0e1-66d15f0cba70"><code class="language-bash"># 创建基于属性的索引
+SADD index:user:gender:male 1001 1003
+SADD index:user:gender:female 1002
+
+# 创建基于年龄范围的索引
+SADD index:user:age:18-25 1001
+SADD index:user:age:26-35 1002 1003
+
+# 查询所有18-25岁的男性用户
+SINTER index:user:gender:male index:user:age:18-25</code></pre>
+            </div>
+        </section>
+        
+        <!-- Transactions and Data Consistency -->
+        <section id="a70e7d91-da51-4ddd-8b3e-5dce2c3e69ce" class="section mb-24">
+            <h2 id="a9213bda-5a6c-4e0a-b99b-6e92c76bb33f" class="text-4xl font-bold mb-12 text-center">事务与数据一致性</h2>
+            <div id="ba387de3-ed8e-4b1d-9ef6-db51e5d4b46b" class="bento-card p-10">
+                <p id="c9c25f87-cec7-49b9-afcc-50b09d4f42ab" class="text-lg mb-6">Redis提供了MULTI/EXEC命令来确保操作的原子性：</p>
+                <pre id="fe1c9eec-17a0-4797-9f25-63e3efbdb20b"><code class="language-bash">MULTI
+HMSET user:1004 name "赵六" age 40 status "active"
+SADD users:active 1004
+SADD index:user:age:36-45 1004
+EXEC</code></pre>
+            </div>
+        </section>
+        
+        <!-- Summary Section -->
+        <section id="f8f08bf2-1fc5-422e-9c72-9dfe80f0ca81" class="section mb-12">
+            <div id="c4ad0d6b-37bb-42e9-a09d-2d7ca8bb0b4c" class="bento-card gradient-primary text-white p-10">
+                <h2 id="d09b12e7-a7f9-40f7-82e9-b1d14c2a40fe" class="text-4xl font-bold mb-8">总结</h2>
+                <p id="ea55afe0-9ac0-4fb5-9a28-1a3c7981b1a6" class="text-xl leading-relaxed mb-6">
+                    虽然Redis没有传统数据库的"表"概念，但通过巧妙使用其数据结构（尤其是哈希），可以有效模拟关系型数据库的表功能。在Redis中，我们主要通过以下方式组织数据：
+                </p>
+                <ol id="f01a5dc3-d975-4cc8-9bbb-9d0fba66d40f" class="list-decimal list-inside text-xl leading-relaxed mb-6 pl-4">
+                    <li id="c07fbf47-4da3-42a4-ba2a-6aadf8b0f0d7" class="mb-2"><strong>哈希表（Hash）</strong>：存储对象属性，相当于表中的一行数据</li>
+                    <li id="a57d1b82-f773-4d67-ace1-5e71eb3c6dab" class="mb-2"><strong>集合（Set）</strong>：存储索引或多对多关系</li>
+                    <li id="a81ca4ff-8624-46f0-83ff-2ee602d5f87b" class="mb-2"><strong>有序集合（Sorted Set）</strong>：实现排序和排行</li>
+                    <li id="b2e11d14-d23a-43ff-918a-a10be2a93d36" class="mb-2"><strong>字符串（String）</strong>：存储简单键值数据或计数器</li>
+                    <li id="e05cf0f6-99cf-4a76-8fc1-e1f5d7f82bc8" class="mb-2"><strong>列表（List）</strong>：存储有序数据或队列</li>
+                </ol>
+                <p id="fdcc02e5-0b8d-4a4b-b71e-e520f9c69ce3" class="text-xl leading-relaxed">
+                    使用Redis设计数据结构时，需要基于应用的访问模式来优化，预先计划好索引和查询方式，这与传统SQL数据库的设计思路有很大不同。最后，Redis作为内存数据库，在设计时还应特别考虑内存使用效率和数据持久化策略。
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <footer id="ac3b60fc-9a9c-4dbb-9950-7c3b5dd3c06e" class="bg-gradient-to-r from-primary/5 to-accent/5 py-10">
+        <div id="e8f44a06-6f41-4c3c-9f9f-5e85c92f2e50" class="container mx-auto px-4 text-center text-text-secondary">
+            <p id="e394c75d-5b46-4cff-9a1e-4eada2e3b2ef">Redis数据组织方式 · 高性能NoSQL数据库</p>
+        </div>
+    </footer>
+
+    <script>
+        // Scroll Animation
+        document.addEventListener('DOMContentLoaded', function() {
+            const sections = document.querySelectorAll('.section');
+            
+            const observerOptions = {
+                root: null,
+                rootMargin: '0px',
+                threshold: 0.15
+            };
+            
+            const observer = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, observerOptions);
+            
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+            
+            // Charts initialization
+            initDataStructuresChart();
+            initStructureSelectionChart();
+        });
+
+        // Initialize Data Structures Chart
+        function initDataStructuresChart() {
+            const chart = echarts.init(document.getElementById('redis-data-structures-chart'));
+            
+            const option = {
+                title: {
+                    text: 'Redis 数据结构',
+                    left: 'center',
+                    textStyle: {
+                        fontSize: 18,
+                        fontWeight: 'bold',
+                        fontFamily: "'Inter', 'Noto Sans SC', sans-serif"
+                    }
+                },
+                tooltip: {
+                    trigger: 'item'
+                },
+                color: ['#ff3b30', '#5856d6', '#007aff', '#34c759', '#ff9500'],
+                series: [
+                    {
+                        name: 'Redis数据结构',
+                        type: 'pie',
+                        radius: ['30%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 10,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: true,
+                            position: 'outside',
+                            formatter: '{b}\n{c}',
+                            fontSize: 14,
+                            fontWeight: 'bold'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: 16,
+                                fontWeight: 'bold'
+                            }
+                        },
+                        labelLine: {
+                            show: true
+                        },
+                        data: [
+                            { value: 30, name: 'String (字符串)' },
+                            { value: 25, name: 'Hash (哈希)' },
+                            { value: 15, name: 'List (列表)' },
+                            { value: 15, name: 'Set (集合)' },
+                            { value: 15, name: 'Sorted Set (有序集)' }
+                        ]
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+
+        // Initialize Structure Selection Chart
+        function initStructureSelectionChart() {
+            const chart = echarts.init(document.getElementById('redis-structure-selection-chart'));
+            
+            const option = {
+                title: {
+                    text: '数据结构选择指南',
+                    left: 'center',
+                    textStyle: {
+                        fontSize: 18,
+                        fontWeight: 'bold',
+                        fontFamily: "'Inter', 'Noto Sans SC', sans-serif"
+                    }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                legend: {
+                    data: ['使用场景数', '复杂度'],
+                    top: 30
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value'
+                },
+                yAxis: {
+                    type: 'category',
+                    data: ['String', 'Hash', 'List', 'Set', 'Sorted Set']
+                },
+                series: [
+                    {
+                        name: '使用场景数',
+                        type: 'bar',
+                        data: [8, 6, 5, 4, 5],
+                        itemStyle: {
+                            color: '#007aff'
+                        }
+                    },
+                    {
+                        name: '复杂度',
+                        type: 'bar',
+                        data: [2, 4, 3, 3, 5],
+                        itemStyle: {
+                            color: '#ff3b30'
+                        }
+                    }
+                ]
+            };
+            
+            chart.setOption(option);
+            
+            window.addEventListener('resize', function() {
+                chart.resize();
+            });
+        }
+    </script>
+</body>
+</html>
