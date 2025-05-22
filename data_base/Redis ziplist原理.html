@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis Ziplist 实现原理</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/framer-motion@6.5.1/dist/framer-motion.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.0/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-c.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            scroll-behavior: smooth;
+            background-color: #f8f9fa;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, rgba(255,255,255,1) 0%, rgba(240,242,245,1) 100%);
+        }
+        
+        .highlight-blue {
+            background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(59,130,246,0.05) 100%);
+        }
+        
+        .highlight-purple {
+            background: linear-gradient(135deg, rgba(139,92,246,0.1) 0%, rgba(139,92,246,0.05) 100%);
+        }
+        
+        .highlight-red {
+            background: linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(239,68,68,0.05) 100%);
+        }
+        
+        .highlight-green {
+            background: linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(16,185,129,0.05) 100%);
+        }
+        
+        .mega-text {
+            font-size: clamp(3rem, 10vw, 8rem);
+            line-height: 1;
+            font-weight: 800;
+        }
+        
+        .section {
+            opacity: 0;
+            transform: translateY(50px);
+            transition: all 1s ease-out;
+        }
+        
+        .section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .code-block {
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .code-block pre {
+            margin: 0;
+            border-radius: 0.5rem;
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section id="f9a9e5a0-8b7c-4e5d-9e1a-9c9b9c9b9c9b" class="min-h-screen flex items-center justify-center gradient-bg p-4 section">
+        <div class="container mx-auto text-center">
+            <h1 class="mega-text text-gray-900 mb-4">Ziplist</h1>
+            <p class="text-3xl md:text-4xl font-medium text-gray-700 mb-8">Redis 高效内存数据结构</p>
+            <div class="flex justify-center">
+                <a href="#intro" class="flex items-center justify-center w-12 h-12 rounded-full bg-blue-500 text-white animate-bounce">
+                    <i class="fas fa-chevron-down"></i>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Introduction Section -->
+    <section id="intro" class="py-20 px-4 section">
+        <div class="container mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+                <div class="md:col-span-5">
+                    <h2 class="text-5xl md:text-6xl font-bold text-gray-900 mb-6">基本概念</h2>
+                    <p class="text-xl text-gray-700 mb-4">
+                        ziplist（压缩列表）是Redis为了<span class="font-semibold text-blue-600">节约内存</span>而开发的顺序型数据结构，它由一系列特殊编码的连续内存块组成。
+                    </p>
+                    <div class="text-lg text-gray-600 space-y-3">
+                        <p><i class="fas fa-check text-green-500 mr-2"></i> 可以包含多个节点，每个节点可以保存一个小整数或短字符串</p>
+                        <p><i class="fas fa-check text-green-500 mr-2"></i> 所有数据存储在一段连续的内存区域，没有额外的指针开销</p>
+                        <p><i class="fas fa-check text-green-500 mr-2"></i> 有点类似Java中ArrayList的底层数组实现，能够很好地利用空间局部性提升内存访问效率</p>
+                    </div>
+                </div>
+                <div class="md:col-span-7 highlight-blue rounded-2xl p-6 flex items-center justify-center">
+                    <div class="w-full h-64" id="f9a9e5a0-8b7c-4e5d-9e1a-9c9b9c9b9c9c"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Memory Layout Section -->
+    <section id="memory-layout" class="py-20 px-4 bg-white section">
+        <div class="container mx-auto">
+            <h2 class="text-5xl md:text-6xl font-bold text-gray-900 mb-12 text-center">内存布局</h2>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+                <div class="md:col-span-7 highlight-purple rounded-2xl p-6">
+                    <div class="w-full h-80" id="f9a9e5a0-8b7c-4e5d-9e1a-9c9b9c9b9c9d"></div>
+                </div>
+                <div class="md:col-span-5">
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">zlbytes <span class="text-sm font-normal text-gray-500">4 bytes</span></h3>
+                            <p class="text-gray-600">记录整个ziplist占用的字节数</p>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">zltail <span class="text-sm font-normal text-gray-500">4 bytes</span></h3>
+                            <p class="text-gray-600">记录ziplist尾节点距离ziplist起始地址的偏移量</p>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">zllen <span class="text-sm font-normal text-gray-500">2 bytes</span></h3>
+                            <p class="text-gray-600">记录ziplist中节点的数量（当数量超过2^16-2时，需要遍历整个列表才能得到真实数量）</p>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">entryX</h3>
+                            <p class="text-gray-600">各个节点，每个节点的长度不一</p>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">zlend <span class="text-sm font-normal text-gray-500">1 byte</span></h3>
+                            <p class="text-gray-600">恒为0xFF，标记ziplist的结束</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Entry Encoding Section -->
+    <section id="entry-encoding" class="py-20 px-4 section">
+        <div class="container mx-auto">
+            <h2 class="text-5xl md:text-6xl font-bold text-gray-900 mb-12 text-center">节点编码方式</h2>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+                <div class="md:col-span-5">
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">previous_entry_length</h3>
+                            <p class="text-gray-600 mb-2">前一节点长度：</p>
+                            <ul class="list-disc pl-5 text-gray-600 space-y-1">
+                                <li>如果前一节点长度小于254字节，使用1字节表示</li>
+                                <li>如果前一节点长度大于等于254字节，则使用5字节表示，第一个字节为0xFE，后四个字节记录实际长度</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">encoding</h3>
+                            <p class="text-gray-600 mb-2">编码：</p>
+                            <ul class="list-disc pl-5 text-gray-600 space-y-1">
+                                <li>如果存储的是整数，则根据整数的大小使用不同的编码（从1字节到8字节不等）</li>
+                                <li>如果存储的是字符串，则根据字符串的长度使用不同的编码方式</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">content</h3>
+                            <p class="text-gray-600">实际存储的数据内容，可以是整数或字符串</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="md:col-span-7 highlight-red rounded-2xl p-6">
+                    <div class="w-full h-80" id="f9a9e5a0-8b7c-4e5d-9e1a-9c9b9c9b9c9e"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Cascade Update Section -->
+    <section id="cascade-update" class="py-20 px-4 bg-white section">
+        <div class="container mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+                <div class="md:col-span-7">
+                    <h2 class="text-5xl md:text-6xl font-bold text-gray-900 mb-6">连锁更新问题</h2>
+                    <p class="text-xl text-gray-700 mb-6">
+                        ziplist的一个重要特性是可能发生"连锁更新"（cascade update）：
+                    </p>
+                    <p class="text-lg text-gray-600 mb-6">
+                        当插入或删除一个元素时，如果引起了该节点的previous_entry_length字段大小变化（例如从1字节变成5字节），就可能导致后续节点的previous_entry_length字段也需要更新，从而引起连锁反应。
+                    </p>
+                    <p class="text-lg text-gray-600">
+                        最坏情况下，插入或删除一个元素可能会导致整个ziplist的重新分配，时间复杂度达到O(N²)。不过在实际应用中，这种最坏情况很少发生。
+                    </p>
+                </div>
+                <div class="md:col-span-5 highlight-green rounded-2xl p-6 flex items-center justify-center">
+                    <div class="w-full h-64" id="f9a9e5a0-8b7c-4e5d-9e1a-9c9b9c9b9c9f"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Application Scenarios Section -->
+    <section id="application" class="py-20 px-4 section">
+        <div class="container mx-auto">
+            <h2 class="text-5xl md:text-6xl font-bold text-gray-900 mb-12 text-center">应用场景</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="bg-white rounded-2xl shadow-lg p-8 transition-transform duration-300 hover:transform hover:scale-105">
+                    <div class="text-4xl text-blue-500 mb-4">
+                        <i class="fas fa-list"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">List</h3>
+                    <p class="text-gray-600">
+                        在Redis 3.2版本之前，当列表元素数量较少且每个元素长度较小时，会使用ziplist实现
+                    </p>
+                </div>
+                <div class="bg-white rounded-2xl shadow-lg p-8 transition-transform duration-300 hover:transform hover:scale-105">
+                    <div class="text-4xl text-purple-500 mb-4">
+                        <i class="fas fa-hashtag"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Hash</h3>
+                    <p class="text-gray-600">
+                        当哈希中存储的字段和值都比较小且数量不多时，会使用ziplist实现
+                    </p>
+                </div>
+                <div class="bg-white rounded-2xl shadow-lg p-8 transition-transform duration-300 hover:transform hover:scale-105">
+                    <div class="text-4xl text-red-500 mb-4">
+                        <i class="fas fa-sort-amount-up"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4">Zset</h3>
+                    <p class="text-gray-600">
+                        当有序集合中的元素个数和元素值的长度较小时，会使用ziplist实现
+                    </p>
+                </div>
+            </div>
+            <div class="mt-12 bg-white rounded-2xl shadow-lg p-8">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">配置参数</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <p class="text-gray-600 mb-2"><code class="bg-gray-100 px-2 py-1 rounded">hash-max-ziplist-entries</code>：哈希中使用ziplist的最大元素数量</p>
+                        <p class="text-gray-600"><code class="bg-gray-100 px-2 py-1 rounded">hash-max-ziplist-value</code>：使用ziplist时哈希中单个元素的最大长度</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600 mb-2"><code class="bg-gray-100 px-2 py-1 rounded">zset-max-ziplist-entries</code>：有序集合中使用ziplist的最大元素数量</p>
+                        <p class="text-gray-600"><code class="bg-gray-100 px-2 py-1 rounded">zset-max-ziplist-value</code>：使用ziplist时有序集合中单个元素的最大长度</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pros and Cons Section -->
+    <section id="pros-cons" class="py-20 px-4 bg-white section">
+        <div class="container mx-auto">
+            <h2 class="text-5xl md:text-6xl font-bold text-gray-900 mb-12 text-center">优缺点</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+                <div class="highlight-blue rounded-2xl p-8">
+                    <h3 class="text-3xl font-bold text-gray-800 mb-6">优点</h3>
+                    <ul class="space-y-4">
+                        <li class="flex items-start">
+                            <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                            <div>
+                                <p class="text-xl font-semibold text-gray-800">内存效率高</p>
+                                <p class="text-gray-600">ziplist额外信息最多需要5个字节存储，相比quicklist双端链表的一个元素需要2个指针（16个字节）要节省很多内存</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check-circle text-green-500 mt-1 mr-3"></i>
+                            <div>
+                                <p class="text-xl font-semibold text-gray-800">局部性好</p>
+                                <p class="text-gray-600">数据存储在连续内存中，对CPU缓存友好</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="highlight-red rounded-2xl p-8">
+                    <h3 class="text-3xl font-bold text-gray-800 mb-6">缺点</h3>
+                    <ul class="space-y-4">
+                        <li class="flex items-start">
+                            <i class="fas fa-times-circle text-red-500 mt-1 mr-3"></i>
+                            <div>
+                                <p class="text-xl font-semibold text-gray-800">插入和删除操作可能引起内存重分配</p>
+                                <p class="text-gray-600">由于是连续存储，插入和删除可能需要移动大量内存</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-times-circle text-red-500 mt-1 mr-3"></i>
+                            <div>
+                                <p class="text-xl font-semibold text-gray-800">可能发生连锁更新</p>
+                                <p class="text-gray-600">在特定情况下，时间复杂度可能恶化</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-times-circle text-red-500 mt-1 mr-3"></i>
+                            <div>
+                                <p class="text-xl font-semibold text-gray-800">不适合存储大量数据</p>
+                                <p class="text-gray-600">当数据量增大时，操作效率会下降</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Evolution Section -->
+    <section id="evolution" class="py-20 px-4 section">
+        <div class="container mx-auto">
+            <h2 class="text-5xl md:text-6xl font-bold text-gray-900 mb-12 text-center">后续演进</h2>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+                <div class="md:col-span-6 highlight-purple rounded-2xl p-8">
+                    <div class="text-center mb-6">
+                        <span class="text-4xl font-bold text-purple-600">Redis 3.2</span>
+                    </div>
+                    <h3 class="text-3xl font-bold text-gray-800 mb-4">Quicklist</h3>
+                    <p class="text-gray-600 mb-4">
+                        在Redis 3.2版本，List类型的底层实现从ziplist/linkedlist改为quicklist，quicklist是ziplist和linkedlist的结合体。
+                    </p>
+                    <p class="text-gray-600">
+                        将一个长ziplist拆分为多个短ziplist，每个短ziplist作为双向链表的一个节点，避免插入或删除元素时导致大量的内存拷贝。
+                    </p>
+                </div>
+                <div class="md:col-span-6 highlight-blue rounded-2xl p-8">
+                    <div class="text-center mb-6">
+                        <span class="text-4xl font-bold text-blue-600">Redis 5.0</span>
+                    </div>
+                    <h3 class="text-3xl font-bold text-gray-800 mb-4">Listpack</h3>
+                    <p class="text-gray-600 mb-4">
+                        在Redis 5.0版本中引入了listpack，作为ziplist的改进版本，主要解决了ziplist的连锁更新问题。
+                    </p>
+                    <p class="text-gray-600">
+                        当zset中的元素个数和元素值的长度达到一定阈值时，Redis会自动将ziplist/listpack转换为skiplist，以提高操作效率。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Code Example Section -->
+    <section id="code-example" class="py-20 px-4 bg-white section">
+        <div class="container mx-auto">
+            <h2 class="text-5xl md:text-6xl font-bold text-gray-900 mb-12 text-center">代码示例</h2>
+            <div class="code-block shadow-lg">
+                <pre><code class="language-c">typedef struct ziplist {
+    uint32_t zlbytes;     /* 整个ziplist占用的字节数 */
+    uint32_t zltail;      /* 到达尾节点的偏移量 */
+    uint16_t zllen;       /* 节点数量 */
+    unsigned char data[]; /* 节点数据 */
+    unsigned char zlend;  /* 结束标记，值为0xFF */
+} ziplist;
+
+typedef struct entry {
+    unsigned char *prevlen;    /* 前一个节点的长度 */
+    unsigned char *encoding;   /* 编码方式 */
+    unsigned char *data;       /* 实际数据 */
+} entry;</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // Animation on scroll
+        document.addEventListener('DOMContentLoaded', function() {
+            const sections = document.querySelectorAll('.section');
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+            
+            // Initialize charts
+            initCharts();
+        });
+        
+        function initCharts() {
+            // Basic concept visualization
+            const conceptChart = echarts.init(document.getElementById('f9a9e5a0-8b7c-4e5d-9e1a-9c9b9c9b9c9c'));
+            const conceptOption = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['普通链表', 'Ziplist'],
+                    axisLabel: {
+                        fontSize: 14
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '内存占用 (字节/元素)',
+                    nameTextStyle: {
+                        fontSize: 14
+                    },
+                    axisLabel: {
+                        fontSize: 14
+                    }
+                },
+                series: [
+                    {
+                        name: '内存占用',
+                        type: 'bar',
+                        data: [24, 5],
+                        itemStyle: {
+                            color: function(params) {
+                                return params.dataIndex === 0 ? '#f87171' : '#60a5fa';
+                            }
+                        },
+                        label: {
+                            show: true,
+                            position: 'top',
+                            fontSize: 16,
+                            fontWeight: 'bold'
+                        }
+                    }
+                ]
+            };
+            conceptChart.setOption(conceptOption);
+            
+            // Memory layout visualization
+            const layoutChart = echarts.init(document.getElementById('f9a9e5a0-8b7c-4e5d-9e1a-9c9b9c9b9c9d'));
+            const layoutOption = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} bytes'
+                },
+                series: [
+                    {
+                        type: 'sankey',
+                        left: 50,
+                        right: 50,
+                        data: [
+                            { name: 'zlbytes', value: 4 },
+                            { name: 'zltail', value: 4 },
+                            { name: 'zllen', value: 2 },
+                            { name: 'entry1', value: 'variable' },
+                            { name: 'entry2', value: 'variable' },
+                            { name: 'entry3', value: 'variable' },
+                            { name: 'entryN', value: 'variable' },
+                            { name: 'zlend', value: 1 }
+                        ],
+                        links: [
+                            { source: 'zlbytes', target: 'zltail', value: 1 },
+                            { source: 'zltail', target: 'zllen', value: 1 },
+                            { source: 'zllen', target: 'entry1', value: 1 },
+                            { source: 'entry1', target: 'entry2', value: 1 },
+                            { source: 'entry2', target: 'entry3', value: 1 },
+                            { source: 'entry3', target: 'entryN', value: 1 },
+                            { source: 'entryN', target: 'zlend', value: 1 }
+                        ],
+                        lineStyle: {
+                            color: 'gradient',
+                            curveness: 0.5
+                        },
+                        itemStyle: {
+                            color: function(params) {
+                                const colors = ['#60a5fa', '#a78bfa', '#f87171', '#34d399', '#fbbf24'];
+                                return colors[params.dataIndex % colors.length];
+                            }
+                        },
+                        label: {
+                            fontSize: 14
+                        }
+                    }
+                ]
+            };
+            layoutChart.setOption(layoutOption);
+            
+            // Entry encoding visualization
+            const encodingChart = echarts.init(document.getElementById('f9a9e5a0-8b7c-4e5d-9e1a-9c9b9c9b9c9e'));
+            const encodingOption = {
+                tooltip: {
+                    trigger: 'item'
+                },
+                series: [
+                    {
+                        type: 'treemap',
+                        data: [
+                            {
+                                name: 'previous_entry_length',
+                                value: 30,
+                                children: [
+                                    { name: '1字节 (<254B)', value: 15 },
+                                    { name: '5字节 (≥254B)', value: 15 }
+                                ]
+                            },
+                            {
+                                name: 'encoding',
+                                value: 30,
+                                children: [
+                                    { name: '整数编码', value: 15 },
+                                    { name: '字符串编码', value: 15 }
+                                ]
+                            },
+                            {
+                                name: 'content',
+                                value: 40,
+                                children: [
+                                    { name: '整数数据', value: 20 },
+                                    { name: '字符串数据', value: 20 }
+                                ]
+                            }
+                        ],
+                        label: {
+                            fontSize: 14
+                        },
+                        breadcrumb: {
+                            show: false
+                        },
+                        itemStyle: {
+                            borderColor: '#fff',
+                            borderWidth: 1,
+                            gapWidth: 1
+                        }
+                    }
+                ]
+            };
+            encodingChart.setOption(encodingOption);
+            
+            // Cascade update visualization
+            const cascadeChart = echarts.init(document.getElementById('f9a9e5a0-8b7c-4e5d-9e1a-9c9b9c9b9c9f'));
+            const cascadeOption = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['最好情况', '平均情况', '最坏情况'],
+                    axisLabel: {
+                        fontSize: 14
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '时间复杂度',
+                    nameTextStyle: {
+                        fontSize: 14
+                    },
+                    axisLabel: {
+                        formatter: function(value) {
+                            if (value === 1) return 'O(1)';
+                            if (value === 2) return 'O(N)';
+                            if (value === 3) return 'O(N²)';
+                            return value;
+                        },
+                        fontSize: 14
+                    },
+                    max: 3
+                },
+                series: [
+                    {
+                        name: '时间复杂度',
+                        type: 'bar',
+                        data: [1, 2, 3],
+                        itemStyle: {
+                            color: function(params) {
+                                const colors = ['#34d399', '#fbbf24', '#f87171'];
+                                return colors[params.dataIndex];
+                            }
+                        },
+                        label: {
+                            show: true,
+                            position: 'top',
+                            formatter: function(params) {
+                                if (params.value === 1) return 'O(1)';
+                                if (params.value === 2) return 'O(N)';
+                                if (params.value === 3) return 'O(N²)';
+                                return params.value;
+                            },
+                            fontSize: 16,
+                            fontWeight: 'bold'
+                        }
+                    }
+                ]
+            };
+            cascadeChart.setOption(cascadeOption);
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                conceptChart.resize();
+                layoutChart.resize();
+                encodingChart.resize();
+                cascadeChart.resize();
+            });
+        }
+    </script>
+</body>
+</html>
