@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RESP协议及原理详解</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-go.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            scroll-behavior: smooth;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(90deg, #3b82f6 0%, #9333ea 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .gradient-blue {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.2) 100%);
+        }
+        
+        .gradient-purple {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%);
+        }
+        
+        .gradient-pink {
+            background: linear-gradient(135deg, rgba(236, 72, 153, 0.2) 0%, rgba(219, 39, 119, 0.2) 100%);
+        }
+        
+        .gradient-green {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%);
+        }
+        
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            grid-gap: 1.5rem;
+        }
+        
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease;
+        }
+        
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .code-block {
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .mega-text {
+            font-size: clamp(3rem, 10vw, 8rem);
+            line-height: 1;
+            font-weight: 900;
+        }
+        
+        .section-title {
+            font-size: clamp(2rem, 5vw, 4rem);
+            font-weight: 800;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-white text-gray-900">
+    <!-- Hero Section -->
+    <header id="hero-section-a1b2c3" class="min-h-screen flex items-center justify-center relative overflow-hidden">
+        <div class="absolute inset-0 z-0">
+            <svg class="w-full h-full opacity-10" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" stroke-width="1"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid)" />
+            </svg>
+        </div>
+        
+        <div class="container mx-auto px-4 py-20 z-10 text-center">
+            <div class="reveal">
+                <h1 class="mega-text gradient-text mb-6">RESP</h1>
+                <p class="text-5xl font-bold mb-8">Redis Serialization Protocol</p>
+                <p class="text-xl text-gray-600 max-w-3xl mx-auto mb-12">
+                    Redis客户端与服务器之间通信的标准协议
+                    <span class="text-sm ml-2">THE STANDARD PROTOCOL</span>
+                </p>
+                <div class="flex justify-center">
+                    <a href="#section-overview" class="bg-blue-600 text-white px-8 py-3 rounded-full font-medium hover:bg-blue-700 transition-colors duration-300 flex items-center">
+                        开始探索
+                        <i class="fas fa-arrow-down ml-2"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="absolute bottom-10 left-0 right-0 text-center">
+            <a href="#section-overview" class="text-gray-500 animate-bounce inline-block">
+                <i class="fas fa-chevron-down text-2xl"></i>
+            </a>
+        </div>
+    </header>
+
+    <!-- Overview Section -->
+    <section id="section-overview" class="py-20 bg-gray-50">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">协议概述</span>
+                </h2>
+                
+                <div class="bento-grid grid-cols-1 md:grid-cols-12 gap-6">
+                    <div class="md:col-span-8 gradient-bg rounded-2xl p-8 shadow-lg reveal">
+                        <h3 class="text-2xl font-bold mb-4">定义与发展</h3>
+                        <p class="text-gray-700 mb-4">RESP是一种二进制安全的文本协议，专为Redis设计，用于客户端与Redis服务器之间的通信。</p>
+                        <ul class="space-y-2">
+                            <li class="flex items-start">
+                                <i class="fas fa-circle text-xs text-blue-500 mt-1.5 mr-2"></i>
+                                <span>在Redis 1.2版本中首次引入</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-circle text-xs text-blue-500 mt-1.5 mr-2"></i>
+                                <span>在Redis 2.0版本中正式成为与Redis服务端通信的标准方案</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-circle text-xs text-blue-500 mt-1.5 mr-2"></i>
+                                <span>Redis 6.0引入了RESP3版本，提供更丰富的数据类型和性能改进</span>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="md:col-span-4 gradient-purple rounded-2xl p-8 shadow-lg reveal">
+                        <div class="flex items-center justify-center h-full">
+                            <div class="text-center">
+                                <div class="text-6xl font-bold mb-4 gradient-text">RESP</div>
+                                <p class="text-sm text-gray-600">Redis Serialization Protocol</p>
+                                <p class="text-xl mt-4">Redis序列化协议</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="md:col-span-4 gradient-green rounded-2xl p-8 shadow-lg reveal">
+                        <h3 class="text-2xl font-bold mb-4">设计特点</h3>
+                        <ul class="space-y-3">
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-green-500 mt-1 mr-2"></i>
+                                <div>
+                                    <span class="font-semibold">简单性</span>
+                                    <p class="text-sm text-gray-600">采用文本协议，易于理解和实现</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-green-500 mt-1 mr-2"></i>
+                                <div>
+                                    <span class="font-semibold">高效性</span>
+                                    <p class="text-sm text-gray-600">二进制安全，支持高效数据传输</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-green-500 mt-1 mr-2"></i>
+                                <div>
+                                    <span class="font-semibold">易于分析</span>
+                                    <p class="text-sm text-gray-600">协议格式简单明确，易于语法分析</p>
+                                </div>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-green-500 mt-1 mr-2"></i>
+                                <div>
+                                    <span class="font-semibold">可读性</span>
+                                    <p class="text-sm text-gray-600">具有较好的人类可读性，便于调试</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="md:col-span-8 gradient-pink rounded-2xl p-8 shadow-lg reveal">
+                        <div id="protocol-timeline" class="h-64"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Data Types Section -->
+    <section id="section-datatypes" class="py-20">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">协议数据类型</span>
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-12 mb-16">
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">基本数据类型</h3>
+                        <p class="text-gray-600 mb-8">RESP本质上是一种序列化协议，支持多种数据类型，RESP中数据的第一个字节决定了其类型：</p>
+                        
+                        <div class="space-y-6">
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <div class="flex items-center mb-3">
+                                    <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mr-3">+</div>
+                                    <h4 class="text-xl font-bold">简单字符串 (Simple Strings)</h4>
+                                </div>
+                                <p class="text-gray-600">以"+"开头，后跟字符串内容和"\r\n"结尾</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <div class="flex items-center mb-3">
+                                    <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-bold mr-3">-</div>
+                                    <h4 class="text-xl font-bold">错误 (Errors)</h4>
+                                </div>
+                                <p class="text-gray-600">以"-"开头，后跟错误信息和"\r\n"结尾</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <div class="flex items-center mb-3">
+                                    <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-bold mr-3">:</div>
+                                    <h4 class="text-xl font-bold">整数 (Integers)</h4>
+                                </div>
+                                <p class="text-gray-600">以":"开头，后跟整数值和"\r\n"结尾</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <div class="flex items-center mb-3">
+                                    <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 font-bold mr-3">$</div>
+                                    <h4 class="text-xl font-bold">大块字符串 (Bulk Strings)</h4>
+                                </div>
+                                <p class="text-gray-600">以"$"开头，后跟字符串长度、"\r\n"、字符串内容和"\r\n"</p>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <div class="flex items-center mb-3">
+                                    <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold mr-3">*</div>
+                                    <h4 class="text-xl font-bold">数组 (Arrays)</h4>
+                                </div>
+                                <p class="text-gray-600">以"*"开头，后跟数组长度、"\r\n"和数组元素内容</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">RESP3的扩展数据类型</h3>
+                        <p class="text-gray-600 mb-8">RESP3协议在RESP2的基础上增加了更多的数据类型：</p>
+                        
+                        <div id="resp3-chart" class="h-96 mb-8"></div>
+                        
+                        <div class="bg-blue-50 rounded-xl p-6">
+                            <h4 class="text-xl font-bold mb-3">RESP3 主要扩展</h4>
+                            <ul class="space-y-2">
+                                <li class="flex items-start">
+                                    <i class="fas fa-plus-circle text-blue-500 mt-1 mr-2"></i>
+                                    <span>Map类型</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <i class="fas fa-plus-circle text-blue-500 mt-1 mr-2"></i>
+                                    <span>Set类型</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <i class="fas fa-plus-circle text-blue-500 mt-1 mr-2"></i>
+                                    <span>浮点数类型</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <i class="fas fa-plus-circle text-blue-500 mt-1 mr-2"></i>
+                                    <span>Boolean类型</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <i class="fas fa-plus-circle text-blue-500 mt-1 mr-2"></i>
+                                    <span>NULL和空值的区分</span>
+                                </li>
+                                <li class="flex items-start">
+                                    <i class="fas fa-plus-circle text-blue-500 mt-1 mr-2"></i>
+                                    <span>大数值支持</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Working Principle Section -->
+    <section id="section-principle" class="py-20 bg-gray-50">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">协议工作原理</span>
+                </h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">通信流程</h3>
+                        
+                        <div class="relative">
+                            <div class="absolute left-4 inset-y-0 w-0.5 bg-blue-200"></div>
+                            
+                            <div class="relative pl-12 pb-12">
+                                <div class="absolute left-0 rounded-full bg-blue-500 text-white w-8 h-8 flex items-center justify-center">1</div>
+                                <h4 class="text-xl font-bold mb-2">客户端按RESP协议格式编码命令</h4>
+                                <p class="text-gray-600">将Redis命令转换为RESP格式的数据</p>
+                            </div>
+                            
+                            <div class="relative pl-12 pb-12">
+                                <div class="absolute left-0 rounded-full bg-blue-500 text-white w-8 h-8 flex items-center justify-center">2</div>
+                                <h4 class="text-xl font-bold mb-2">客户端发送请求到Redis服务器</h4>
+                                <p class="text-gray-600">通过TCP连接发送RESP格式的请求</p>
+                            </div>
+                            
+                            <div class="relative pl-12 pb-12">
+                                <div class="absolute left-0 rounded-full bg-blue-500 text-white w-8 h-8 flex items-center justify-center">3</div>
+                                <h4 class="text-xl font-bold mb-2">服务器解析RESP请求</h4>
+                                <p class="text-gray-600">Redis服务器解析接收到的RESP格式数据</p>
+                            </div>
+                            
+                            <div class="relative pl-12 pb-12">
+                                <div class="absolute left-0 rounded-full bg-blue-500 text-white w-8 h-8 flex items-center justify-center">4</div>
+                                <h4 class="text-xl font-bold mb-2">服务器执行命令</h4>
+                                <p class="text-gray-600">根据解析结果执行相应的Redis命令</p>
+                            </div>
+                            
+                            <div class="relative pl-12 pb-12">
+                                <div class="absolute left-0 rounded-full bg-blue-500 text-white w-8 h-8 flex items-center justify-center">5</div>
+                                <h4 class="text-xl font-bold mb-2">服务器按RESP协议格式编码响应</h4>
+                                <p class="text-gray-600">将执行结果转换为RESP格式的数据</p>
+                            </div>
+                            
+                            <div class="relative pl-12 pb-12">
+                                <div class="absolute left-0 rounded-full bg-blue-500 text-white w-8 h-8 flex items-center justify-center">6</div>
+                                <h4 class="text-xl font-bold mb-2">服务器返回响应到客户端</h4>
+                                <p class="text-gray-600">通过TCP连接发送RESP格式的响应</p>
+                            </div>
+                            
+                            <div class="relative pl-12">
+                                <div class="absolute left-0 rounded-full bg-blue-500 text-white w-8 h-8 flex items-center justify-center">7</div>
+                                <h4 class="text-xl font-bold mb-2">客户端解析RESP响应</h4>
+                                <p class="text-gray-600">解析接收到的RESP格式数据并返回结果</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">请求-响应模型</h3>
+                        
+                        <div id="request-response-diagram" class="h-96 mb-8"></div>
+                        
+                        <div class="space-y-6">
+                            <div class="bg-white rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">请求过程</h4>
+                                <ul class="space-y-2">
+                                    <li class="flex items-start">
+                                        <i class="fas fa-arrow-right text-blue-500 mt-1 mr-2"></i>
+                                        <span>客户端以RESP格式的字符串数组形式向Redis服务器发送命令</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fas fa-arrow-right text-blue-500 mt-1 mr-2"></i>
+                                        <span>每个命令都按照RESP协议规则进行编码</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-white rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">响应过程</h4>
+                                <ul class="space-y-2">
+                                    <li class="flex items-start">
+                                        <i class="fas fa-arrow-left text-green-500 mt-1 mr-2"></i>
+                                        <span>服务器解析请求并执行相应的操作</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fas fa-arrow-left text-green-500 mt-1 mr-2"></i>
+                                        <span>根据操作结果构建RESP格式的响应</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fas fa-arrow-left text-green-500 mt-1 mr-2"></i>
+                                        <span>将响应发送回客户端</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Encoding Rules Section -->
+    <section id="section-encoding" class="py-20">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">协议编码规则</span>
+                </h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">基本编码格式</h3>
+                        
+                        <div class="space-y-8">
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">简单字符串编码</h4>
+                                <div class="code-block">
+                                    <pre><code class="language-plaintext">+OK\r\n</code></pre>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">错误编码</h4>
+                                <div class="code-block">
+                                    <pre><code class="language-plaintext">-ERR unknown command 'foobar'\r\n</code></pre>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">整数编码</h4>
+                                <div class="code-block">
+                                    <pre><code class="language-plaintext">:1000\r\n</code></pre>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">大块字符串编码</h4>
+                                <div class="code-block">
+                                    <pre><code class="language-plaintext">$6\r\nfoobar\r\n</code></pre>
+                                </div>
+                                <p class="text-gray-600 mt-3">表示长度为6的字符串"foobar"</p>
+                                <p class="text-gray-600">空字符串表示为：<code>$0\r\n\r\n</code></p>
+                                <p class="text-gray-600">NULL值表示为：<code>$-1\r\n</code></p>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">数组编码</h4>
+                                <div class="code-block">
+                                    <pre><code class="language-plaintext">*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n</code></pre>
+                                </div>
+                                <p class="text-gray-600 mt-3">表示一个包含3个元素的数组，分别是"SET"、"key"和"value"</p>
+                                <p class="text-gray-600">空数组表示为：<code>*0\r\n</code></p>
+                                <p class="text-gray-600">NULL数组表示为：<code>*-1\r\n</code></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">命令编码示例</h3>
+                        
+                        <div class="space-y-8">
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">SET key value 命令的RESP编码</h4>
+                                <div class="code-block">
+                                    <pre><code class="language-plaintext">*3\r\n           # 数组，包含3个元素
+$3\r\n           # 第一个元素长度为3
+SET\r\n          # 第一个元素内容为"SET"
+$3\r\n           # 第二个元素长度为3
+key\r\n          # 第二个元素内容为"key"
+$5\r\n           # 第三个元素长度为5
+value\r\n        # 第三个元素内容为"value"</code></pre>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-gray-50 rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">GET key 命令的RESP编码</h4>
+                                <div class="code-block">
+                                    <pre><code class="language-plaintext">*2\r\n           # 数组，包含2个元素
+$3\r\n           # 第一个元素长度为3
+GET\r\n          # 第一个元素内容为"GET"
+$3\r\n           # 第二个元素长度为3
+key\r\n          # 第二个元素内容为"key"</code></pre>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-blue-50 rounded-xl p-6">
+                                <h4 class="text-xl font-bold mb-3">编码过程可视化</h4>
+                                <div id="encoding-visualization" class="h-64"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Implementation Section -->
+    <section id="section-implementation" class="py-20 bg-gray-50">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">协议实现原理</span>
+                </h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">解析流程</h3>
+                        
+                        <div class="bg-white rounded-xl p-8 shadow-md">
+                            <ol class="space-y-6">
+                                <li class="flex">
+                                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">1</div>
+                                    <div class="ml-4">
+                                        <h4 class="text-xl font-bold">接收数据流</h4>
+                                        <p class="text-gray-600">从网络连接中读取原始数据</p>
+                                    </div>
+                                </li>
+                                
+                                <li class="flex">
+                                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">2</div>
+                                    <div class="ml-4">
+                                        <h4 class="text-xl font-bold">检查首字节，确定数据类型</h4>
+                                        <ul class="mt-2 space-y-1 text-gray-600">
+                                            <li>"+"：解析简单字符串</li>
+                                            <li>"-"：解析错误信息</li>
+                                            <li>":"：解析整数值</li>
+                                            <li>"$"：解析大块字符串</li>
+                                            <li>"*"：解析数组</li>
+                                        </ul>
+                                    </div>
+                                </li>
+                                
+                                <li class="flex">
+                                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">3</div>
+                                    <div class="ml-4">
+                                        <h4 class="text-xl font-bold">根据数据类型进行相应的解析处理</h4>
+                                        <p class="text-gray-600">针对不同类型的数据采用不同的解析策略</p>
+                                    </div>
+                                </li>
+                                
+                                <li class="flex">
+                                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">4</div>
+                                    <div class="ml-4">
+                                        <h4 class="text-xl font-bold">对于数组类型，递归解析每个元素</h4>
+                                        <p class="text-gray-600">数组中的每个元素可能是任意RESP数据类型，需要递归处理</p>
+                                    </div>
+                                </li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">编码实现示例</h3>
+                        
+                        <div class="bg-white rounded-xl p-6 shadow-md">
+                            <h4 class="text-xl font-bold mb-3">RESP协议解析器实现思路</h4>
+                            <div class="code-block">
+                                <pre><code class="language-go">// 伪代码：RESP协议解析器的实现思路
+func parseRESP(reader *bufio.Reader) (interface{}, error) {
+    // 读取第一个字节，确定数据类型
+    firstByte, err := reader.ReadByte()
+    if err != nil {
+        return nil, err
+    }
+    
+    switch firstByte {
+    case '+': // 简单字符串
+        line, err := readLine(reader)
+        return string(line), err
+        
+    case '-': // 错误信息
+        line, err := readLine(reader)
+        return Error(string(line)), err
+        
+    case ':': // 整数
+        line, err := readLine(reader)
+        if err != nil {
+            return nil, err
+        }
+        return strconv.ParseInt(string(line), 10, 64)
+        
+    case '$': // 大块字符串
+        line, err := readLine(reader)
+        if err != nil {
+            return nil, err
+        }
+        
+        length, err := strconv.ParseInt(string(line), 10, 64)
+        if err != nil {
+            return nil, err
+        }
+        
+        if length < 0 {
+            return nil, nil // NULL值
+        }
+        
+        data := make([]byte, length)
+        _, err = io.ReadFull(reader, data)
+        if err != nil {
+            return nil, err
+        }
+        
+        // 读取末尾的\r\n
+        _, err = reader.ReadByte()
+        _, err = reader.ReadByte()
+        
+        return data, nil
+        
+    case '*': // 数组
+        line, err := readLine(reader)
+        if err != nil {
+            return nil, err
+        }
+        
+        count, err := strconv.ParseInt(string(line), 10, 64)
+        if err != nil {
+            return nil, err
+        }
+        
+        if count < 0 {
+            return nil, nil // NULL数组
+        }
+        
+        array := make([]interface{}, count)
+        for i := int64(0); i < count; i++ {
+            value, err := parseRESP(reader)
+            if err != nil {
+                return nil, err
+            }
+            array[i] = value
+        }
+        
+        return array, nil
+        
+    default:
+        return nil, errors.New("未知的RESP数据类型")
+    }
+}
+
+// 读取一行，直到遇到\r\n
+func readLine(reader *bufio.Reader) ([]byte, error) {
+    var line []byte
+    for {
+        b, err := reader.ReadByte()
+        if err != nil {
+            return nil, err
+        }
+        
+        if b == '\r' {
+            b, err = reader.ReadByte()
+            if err != nil {
+                return nil, err
+            }
+            if b == '\n' {
+                return line, nil
+            }
+        }
+        
+        line = append(line, b)
+    }
+}</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Application Scenarios Section -->
+    <section id="section-applications" class="py-20">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">协议应用场景</span>
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="bg-gray-50 rounded-2xl p-8 shadow-lg reveal">
+                        <div class="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-6">
+                            <i class="fas fa-code text-blue-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold mb-4">Redis客户端开发</h3>
+                        <p class="text-gray-600 mb-4">RESP协议是开发Redis客户端的基础，所有Redis客户端都必须实现此协议</p>
+                        <ul class="space-y-2 text-gray-600">
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mt-1 mr-2"></i>
+                                <span>各种编程语言的Redis客户端库（如Java的Jedis、Python的redis-py等）都实现了RESP协议</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mt-1 mr-2"></i>
+                                <span>命令行工具redis-cli通过RESP协议与Redis服务器通信</span>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-2xl p-8 shadow-lg reveal">
+                        <div class="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-6">
+                            <i class="fas fa-server text-purple-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold mb-4">第三方兼容实现</h3>
+                        <p class="text-gray-600 mb-4">RESP协议也被其他符合Redis协议的系统采用</p>
+                        <ul class="space-y-2 text-gray-600">
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mt-1 mr-2"></i>
+                                <span>Valkey（Redis的一个分支）采用RESP协议</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mt-1 mr-2"></i>
+                                <span>Amazon ElastiCache for Redis支持RESP协议</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mt-1 mr-2"></i>
+                                <span>GLIDE for Redis（AWS赞助的OSS Redis客户端）适用于任何符合RESP规范的Redis发行版</span>
+                            </li>
+                        </ul>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-2xl p-8 shadow-lg reveal">
+                        <div class="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-6">
+                            <i class="fas fa-network-wired text-green-600 text-2xl"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold mb-4">网络框架集成</h3>
+                        <p class="text-gray-600 mb-4">一些流行的网络编程框架集成了RESP协议的实现</p>
+                        <ul class="space-y-2 text-gray-600">
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mt-1 mr-2"></i>
+                                <span>Netty框架中包含了对RESP协议的实现，便于开发高性能的Redis客户端</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mt-1 mr-2"></i>
+                                <span>通过序列化操作，将消息对象转换为符合RESP协议的字节数组，然后输出到ByteBuf中</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="mt-16 reveal">
+                    <div id="applications-chart" class="h-96"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- RESP2 vs RESP3 Section -->
+    <section id="section-comparison" class="py-20 bg-gray-50">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">RESP2 与 RESP3 的区别</span>
+                </h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">主要改进</h3>
+                        
+                        <div class="space-y-8">
+                            <div class="bg-white rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">数据类型扩展</h4>
+                                <ul class="space-y-2 text-gray-600">
+                                    <li class="flex items-start">
+                                        <i class="fas fa-plus-circle text-blue-500 mt-1 mr-2"></i>
+                                        <span>增加了Map、Set、Boolean等类型</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fas fa-plus-circle text-blue-500 mt-1 mr-2"></i>
+                                        <span>支持浮点数类型</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fas fa-plus-circle text-blue-500 mt-1 mr-2"></i>
+                                        <span>区分NULL和空值</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-white rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">性能优化</h4>
+                                <ul class="space-y-2 text-gray-600">
+                                    <li class="flex items-start">
+                                        <i class="fas fa-tachometer-alt text-green-500 mt-1 mr-2"></i>
+                                        <span>更高效的数据编码方式</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fas fa-tachometer-alt text-green-500 mt-1 mr-2"></i>
+                                        <span>更丰富的客户端/服务器交互能力</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            
+                            <div class="bg-white rounded-xl p-6 shadow-md">
+                                <h4 class="text-xl font-bold mb-3">兼容性</h4>
+                                <ul class="space-y-2 text-gray-600">
+                                    <li class="flex items-start">
+                                        <i class="fas fa-sync text-purple-500 mt-1 mr-2"></i>
+                                        <span>RESP3是向后兼容的，Redis服务器可以同时处理RESP2和RESP3协议</span>
+                                    </li>
+                                    <li class="flex items-start">
+                                        <i class="fas fa-sync text-purple-500 mt-1 mr-2"></i>
+                                        <span>客户端可以选择使用哪个版本的协议</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="reveal">
+                        <h3 class="text-3xl font-bold mb-6">注意事项</h3>
+                        
+                        <div id="resp-comparison-chart" class="h-64 mb-8"></div>
+                        
+                        <div class="bg-yellow-50 rounded-xl p-6 shadow-md">
+                            <h4 class="text-xl font-bold mb-3">潜在问题</h4>
+                            <ul class="space-y-3 text-gray-700">
+                                <li class="flex items-start">
+                                    <i class="fas fa-exclamation-triangle text-yellow-500 mt-1 mr-2"></i>
+                                    <div>
+                                        <p>SpringBoot 2.5.7使用的lettuce版本6.1.5，连接Redis时默认通过RESP3协议，可能导致连接失败，需要手动改回RESP2</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start">
+                                    <i class="fas fa-exclamation-triangle text-yellow-500 mt-1 mr-2"></i>
+                                    <div>
+                                        <p>在升级Redis实例版本时，尤其是升级到Redis 7.2版本，需要注意RESP协议的变化</p>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pros and Cons Section -->
+    <section id="section-pros-cons" class="py-20">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">协议的优缺点</span>
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div class="reveal">
+                        <div class="bg-blue-50 rounded-2xl p-8 shadow-lg h-full">
+                            <div class="flex items-center mb-6">
+                                <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mr-4">
+                                    <i class="fas fa-thumbs-up text-blue-600 text-2xl"></i>
+                                </div>
+                                <h3 class="text-3xl font-bold">优点</h3>
+                            </div>
+                            
+                            <ul class="space-y-4">
+                                <li class="flex items-start">
+                                    <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0 mt-1 mr-3">1</div>
+                                    <div>
+                                        <h4 class="text-xl font-bold">简单高效</h4>
+                                        <p class="text-gray-600">协议设计简单明确，易于实现和解析</p>
+                                    </div>
+                                </li>
+                                
+                                <li class="flex items-start">
+                                    <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0 mt-1 mr-3">2</div>
+                                    <div>
+                                        <h4 class="text-xl font-bold">二进制安全</h4>
+                                        <p class="text-gray-600">可以处理包含任意二进制数据的字符串</p>
+                                    </div>
+                                </li>
+                                
+                                <li class="flex items-start">
+                                    <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0 mt-1 mr-3">3</div>
+                                    <div>
+                                        <h4 class="text-xl font-bold">人类可读</h4>
+                                        <p class="text-gray-600">协议格式具有较好的可读性，便于调试</p>
+                                    </div>
+                                </li>
+                                
+                                <li class="flex items-start">
+                                    <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0 mt-1 mr-3">4</div>
+                                    <div>
+                                        <h4 class="text-xl font-bold">跨语言支持</h4>
+                                        <p class="text-gray-600">易于在各种编程语言中实现</p>
+                                    </div>
+                                </li>
+                                
+                                <li class="flex items-start">
+                                    <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0 mt-1 mr-3">5</div>
+                                    <div>
+                                        <h4 class="text-xl font-bold">高效性能</h4>
+                                        <p class="text-gray-600">简单的协议设计带来高效的网络通信性能</p>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="reveal">
+                        <div class="bg-red-50 rounded-2xl p-8 shadow-lg h-full">
+                            <div class="flex items-center mb-6">
+                                <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mr-4">
+                                    <i class="fas fa-thumbs-down text-red-600 text-2xl"></i>
+                                </div>
+                                <h3 class="text-3xl font-bold">局限性</h3>
+                            </div>
+                            
+                            <ul class="space-y-4">
+                                <li class="flex items-start">
+                                    <div class="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0 mt-1 mr-3">1</div>
+                                    <div>
+                                        <h4 class="text-xl font-bold">冗余</h4>
+                                        <p class="text-gray-600">某些数据类型的表示相对冗长，如大型数组或嵌套结构</p>
+                                    </div>
+                                </li>
+                                
+                                <li class="flex items-start">
+                                    <div class="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0 mt-1 mr-3">2</div>
+                                    <div>
+                                        <h4 class="text-xl font-bold">类型有限</h4>
+                                        <p class="text-gray-600">RESP2只支持有限的数据类型，虽然RESP3已经扩展了类型系统</p>
+                                    </div>
+                                </li>
+                                
+                                <li class="flex items-start">
+                                    <div class="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0 mt-1 mr-3">3</div>
+                                    <div>
+                                        <h4 class="text-xl font-bold">错误处理</h4>
+                                        <p class="text-gray-600">错误处理机制相对简单，不如某些现代协议丰富</p>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Implementation Steps Section -->
+    <section id="section-steps" class="py-20 bg-gray-50">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">实现RESP协议解析器的关键步骤</span>
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-6">
+                    <div class="md:col-span-1 reveal">
+                        <div class="bg-white rounded-2xl p-6 shadow-lg h-full flex flex-col items-center justify-center text-center">
+                            <div class="w-16 h-16 rounded-full bg-blue-500 text-white flex items-center justify-center text-2xl font-bold mb-4">1</div>
+                            <h3 class="text-xl font-bold mb-2">读取第一个字节</h3>
+                            <p class="text-gray-600">根据首字节确定数据类型</p>
+                        </div>
+                    </div>
+                    
+                    <div class="md:col-span-1 reveal">
+                        <div class="bg-white rounded-2xl p-6 shadow-lg h-full flex flex-col items-center justify-center text-center">
+                            <div class="w-16 h-16 rounded-full bg-blue-500 text-white flex items-center justify-center text-2xl font-bold mb-4">2</div>
+                            <h3 class="text-xl font-bold mb-2">解析长度信息</h3>
+                            <p class="text-gray-600">对于大块字符串和数组，需要解析长度信息</p>
+                        </div>
+                    </div>
+                    
+                    <div class="md:col-span-1 reveal">
+                        <div class="bg-white rounded-2xl p-6 shadow-lg h-full flex flex-col items-center justify-center text-center">
+                            <div class="w-16 h-16 rounded-full bg-blue-500 text-white flex items-center justify-center text-2xl font-bold mb-4">3</div>
+                            <h3 class="text-xl font-bold mb-2">递归解析</h3>
+                            <p class="text-gray-600">对于数组类型，需要递归解析每个元素</p>
+                        </div>
+                    </div>
+                    
+                    <div class="md:col-span-1 reveal">
+                        <div class="bg-white rounded-2xl p-6 shadow-lg h-full flex flex-col items-center justify-center text-center">
+                            <div class="w-16 h-16 rounded-full bg-blue-500 text-white flex items-center justify-center text-2xl font-bold mb-4">4</div>
+                            <h3 class="text-xl font-bold mb-2">处理特殊值</h3>
+                            <p class="text-gray-600">处理NULL值和空值的特殊表示</p>
+                        </div>
+                    </div>
+                    
+                    <div class="md:col-span-1 reveal">
+                        <div class="bg-white rounded-2xl p-6 shadow-lg h-full flex flex-col items-center justify-center text-center">
+                            <div class="w-16 h-16 rounded-full bg-blue-500 text-white flex items-center justify-center text-2xl font-bold mb-4">5</div>
+                            <h3 class="text-xl font-bold mb-2">错误处理</h3>
+                            <p class="text-gray-600">妥善处理协议解析过程中的各种异常情况</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-16 reveal">
+                    <div id="implementation-flow" class="h-96"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Summary Section -->
+    <section id="section-summary" class="py-20">
+        <div class="container mx-auto px-4">
+            <div class="reveal">
+                <h2 class="section-title text-center mb-16">
+                    <span class="gradient-text">总结</span>
+                </h2>
+                
+                <div class="bg-gray-50 rounded-3xl p-8 md:p-12 shadow-xl max-w-4xl mx-auto">
+                    <p class="text-xl leading-relaxed text-gray-700 mb-6">
+                        RESP协议是Redis客户端与服务器通信的核心协议，其简单高效的设计理念使其成为Redis生态系统的重要组成部分。通过本文的详细讲解，您应该已经了解了RESP协议的定义、数据类型、编码规则、工作原理以及应用场景。
+                    </p>
+                    
+                    <p class="text-xl leading-relaxed text-gray-700 mb-6">
+                        随着Redis版本的不断发展，RESP协议也在不断演进，从RESP2到RESP3，增加了更多的数据类型和性能优化。无论是开发Redis客户端、设计兼容Redis的系统，还是理解Redis的网络通信原理，深入理解RESP协议都是不可或缺的一环。
+                    </p>
+                    
+                    <p class="text-xl leading-relaxed text-gray-700">
+                        作为一个二进制安全的文本协议，RESP协议成功平衡了简单性、可读性和高效性，这也是它能够成为Redis标准通信协议的重要原因。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="container mx-auto px-4 text-center">
+            <h2 class="text-3xl font-bold mb-6">RESP协议及原理详解</h2>
+            <p class="text-gray-400 mb-8">Redis Serialization Protocol</p>
+            <div class="flex justify-center space-x-4">
+                <a href="#hero-section-a1b2c3" class="text-gray-400 hover:text-white transition-colors duration-300">
+                    <i class="fas fa-arrow-up mr-2"></i>返回顶部
+                </a>
+            </div>
+            <p class="mt-8 text-sm text-gray-500">© 2023 RESP协议详解</p>
+        </div>
+    </footer>
+
+    <script>
+        // Scroll reveal animation
+        function revealOnScroll() {
+            const reveals = document.querySelectorAll('.reveal');
+            
+            for (let i = 0; i < reveals.length; i++) {
+                const windowHeight = window.innerHeight;
+                const elementTop = reveals[i].getBoundingClientRect().top;
+                const elementVisible = 150;
+                
+                if (elementTop < windowHeight - elementVisible) {
+                    reveals[i].classList.add('active');
+                }
+            }
+        }
+        
+        window.addEventListener('scroll', revealOnScroll);
+        window.addEventListener('load', revealOnScroll);
+        
+        // Initialize charts when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Protocol Timeline Chart
+            const protocolTimelineChart = echarts.init(document.getElementById('protocol-timeline'));
+            protocolTimelineChart.setOption({
+                title: {
+                    text: 'RESP协议发展历程',
+                    left: 'center',
+                    textStyle: {
+                        fontWeight: 'bold',
+                        fontSize: 16
+                    }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        return params[0].name + ': ' + params[0].value;
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['Redis 1.2', 'Redis 2.0', 'Redis 6.0', 'Redis 7.0'],
+                    axisLabel: {
+                        interval: 0
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    show: false
+                },
+                series: [{
+                    data: [1, 2, 3, 3.5],
+                    type: 'line',
+                    smooth: true,
+                    lineStyle: {
+                        width: 4,
+                        color: {
+                            type: 'linear',
+                            x: 0,
+                            y: 0,
+                            x2: 1,
+                            y2: 0,
+                            colorStops: [{
+                                offset: 0, color: '#3b82f6'
+                            }, {
+                                offset: 1, color: '#9333ea'
+                            }]
+                        }
+                    },
+                    symbol: 'circle',
+                    symbolSize: 12,
+                    itemStyle: {
+                        color: '#3b82f6'
+                    },
+                    markPoint: {
+                        data: [
+                            {name: 'RESP首次引入', coord: [0, 1], value: 'RESP首次引入'},
+                            {name: 'RESP成为标准', coord: [1, 2], value: 'RESP成为标准'},
+                            {name: 'RESP3引入', coord: [2, 3], value: 'RESP3引入'},
+                            {name: 'RESP3改进', coord: [3, 3.5], value: 'RESP3改进'}
+                        ],
+                        symbol: 'pin',
+                        symbolSize: 40,
+                        itemStyle: {
+                            color: '#3b82f6'
+                        }
+                    }
+                }]
+            });
+            
+            // RESP3 Chart
+            const resp3Chart = echarts.init(document.getElementById('resp3-chart'));
+            resp3Chart.setOption({
+                title: {
+                    text: 'RESP2 vs RESP3 数据类型对比',
+                    left: 'center',
+                    textStyle: {
+                        fontWeight: 'bold',
+                        fontSize: 16
+                    }
+                },
+                tooltip: {
+                    trigger: 'item'
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 'left'
+                },
+                series: [
+                    {
+                        name: '数据类型',
+                        type: 'pie',
+                        radius: ['40%', '70%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: {
+                            borderRadius: 10,
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        },
+                        label: {
+                            show: false,
+                            position: 'center'
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: '18',
+                                fontWeight: 'bold'
+                            }
+                        },
+                        labelLine: {
+                            show: false
+                        },
+                        data: [
+                            { value: 5, name: 'RESP2基本类型' },
+                            { value: 6, name: 'RESP3新增类型' }
+                        ],
+                        color: ['#3b82f6', '#9333ea']
+                    }
+                ]
+            });
+            
+            // Request-Response Diagram
+            const requestResponseDiagram = echarts.init(document.getElementById('request-response-diagram'));
+            requestResponseDiagram.setOption({
+                title: {
+                    text: 'RESP请求-响应模型',
+                    left: 'center',
+                    textStyle: {
+                        fontWeight: 'bold',
+                        fontSize: 16
+                    }
+                },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b}: {c}'
+                },
+                legend: {
+                    data: ['请求', '响应'],
+                    bottom: 0
+                },
+                series: [
+                    {
+                        name: '通信过程',
+                        type: 'sankey',
+                        left: 50,
+                        top: 20,
+                        right: 150,
+                        bottom: 25,
+                        data: [
+                            { name: '客户端' },
+                            { name: '编码命令' },
+                            { name: '发送请求' },
+                            { name: 'Redis服务器' },
+                            { name: '解析请求' },
+                            { name: '执行命令' },
+                            { name: '编码响应' },
+                            { name: '发送响应' },
+                            { name: '解析响应' }
+                        ],
+                        links: [
+                            { source: '客户端', target: '编码命令', value: 1 },
+                            { source: '编码命令', target: '发送请求', value: 1 },
+                            { source: '发送请求', target: 'Redis服务器', value: 1 },
+                            { source: 'Redis服务器', target: '解析请求', value: 1 },
+                            { source: '解析请求', target: '执行命令', value: 1 },
+                            { source: '执行命令', target: '编码响应', value: 1 },
+                            { source: '编码响应', target: '发送响应', value: 1 },
+                            { source: '发送响应', target: '客户端', value: 1 },
+                            { source: '客户端', target: '解析响应', value: 1 }
+                        ],
+                        lineStyle: {
+                            color: 'gradient',
+                            curveness: 0.5
+                        }
+                    }
+                ]
+            });
+            
+            // Encoding Visualization
+            const encodingVisualization = echarts.init(document.getElementById('encoding-visualization'));
+            encodingVisualization.setOption({
+                title: {
+                    text: 'RESP编码过程',
+                    left: 'center',
+                    textStyle: {
+                        fontWeight: 'bold',
+                        fontSize: 16
+                    }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                legend: {
+                    data: ['命令', 'RESP编码'],
+                    bottom: 0
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '15%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    boundaryGap: [0, 0.01]
+                },
+                yAxis: {
+                    type: 'category',
+                    data: ['GET key', 'SET key value', 'HSET hash field value', 'LPUSH list value']
+                },
+                series: [
+                    {
+                        name: '命令',
+                        type: 'bar',
+                        data: [2, 3, 4, 3],
+                        itemStyle: {
+                            color: '#3b82f6'
+                        }
+                    },
+                    {
+                        name: 'RESP编码',
+                        type: 'bar',
+                        data: [6, 9, 12, 9],
+                        itemStyle: {
+                            color: '#9333ea'
+                        }
+                    }
+                ]
+            });
+            
+            // Applications Chart
+            const applicationsChart = echarts.init(document.getElementById('applications-chart'));
+            applicationsChart.setOption({
+                title: {
+                    text: 'RESP协议应用场景分布',
+                    left: 'center',
+                    textStyle: {
+                        fontWeight: 'bold',
+                        fontSize: 16
+                    }
+                },
+                tooltip: {
+                    trigger: 'item'
+                },
+                legend: {
+                    bottom: 0,
+                    left: 'center'
+                },
+                series: [
+                    {
+                        name: '应用场景',
+                        type: 'pie',
+                        radius: ['30%', '60%'],
+                        center: ['50%', '50%'],
+                        roseType: 'area',
+                        itemStyle: {
+                            borderRadius: 8
+                        },
+                        data: [
+                            { value: 40, name: 'Redis客户端开发' },
+                            { value: 30, name: '第三方兼容实现' },
+                            { value: 20, name: '网络框架集成' },
+                            { value: 10, name: '其他应用' }
+                        ],
+                        color: ['#3b82f6', '#9333ea', '#10b981', '#f59e0b']
+                    }
+                ]
+            });
+            
+            // RESP Comparison Chart
+            const respComparisonChart = echarts.init(document.getElementById('resp-comparison-chart'));
+            respComparisonChart.setOption({
+                title: {
+                    text: 'RESP2 vs RESP3',
+                    left: 'center',
+                    textStyle: {
+                        fontWeight: 'bold',
+                        fontSize: 16
+                    }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                legend: {
+                    data: ['RESP2', 'RESP3'],
+                    bottom: 0
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '15%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['数据类型数量', '性能', '兼容性', '可读性']
+                },
+                yAxis: {
+                    type: 'value',
+                    max: 10
+                },
+                series: [
+                    {
+                        name: 'RESP2',
+                        type: 'bar',
+                        data: [5, 7, 8, 9],
+                        itemStyle: {
+                            color: '#3b82f6'
+                        }
+                    },
+                    {
+                        name: 'RESP3',
+                        type: 'bar',
+                        data: [10, 9, 7, 8],
+                        itemStyle: {
+                            color: '#9333ea'
+                        }
+                    }
+                ]
+            });
+            
+            // Implementation Flow
+            const implementationFlow = echarts.init(document.getElementById('implementation-flow'));
+            implementationFlow.setOption({
+                title: {
+                    text: 'RESP解析器实现流程',
+                    left: 'center',
+                    textStyle: {
+                        fontWeight: 'bold',
+                        fontSize: 16
+                    }
+                },
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{a} <br/>{b} : {c}'
+                },
+                series: [
+                    {
+                        name: '解析流程',
+                        type: 'graph',
+                        layout: 'force',
+                        data: [
+                            { name: '接收数据', value: 1, symbolSize: 60, itemStyle: { color: '#3b82f6' } },
+                            { name: '检查首字节', value: 2, symbolSize: 60, itemStyle: { color: '#3b82f6' } },
+                            { name: '解析简单字符串', value: 3, symbolSize: 50, itemStyle: { color: '#9333ea' } },
+                            { name: '解析错误', value: 3, symbolSize: 50, itemStyle: { color: '#9333ea' } },
+                            { name: '解析整数', value: 3, symbolSize: 50, itemStyle: { color: '#9333ea' } },
+                            { name: '解析大块字符串', value: 3, symbolSize: 50, itemStyle: { color: '#9333ea' } },
+                            { name: '解析数组', value: 3, symbolSize: 50, itemStyle: { color: '#9333ea' } },
+                            { name: '递归解析元素', value: 4, symbolSize: 60, itemStyle: { color: '#10b981' } },
+                            { name: '返回结果', value: 5, symbolSize: 60, itemStyle: { color: '#10b981' } }
+                        ],
+                        links: [
+                            { source: '接收数据', target: '检查首字节' },
+                            { source: '检查首字节', target: '解析简单字符串' },
+                            { source: '检查首字节', target: '解析错误' },
+                            { source: '检查首字节', target: '解析整数' },
+                            { source: '检查首字节', target: '解析大块字符串' },
+                            { source: '检查首字节', target: '解析数组' },
+                            { source: '解析简单字符串', target: '返回结果' },
+                            { source: '解析错误', target: '返回结果' },
+                            { source: '解析整数', target: '返回结果' },
+                            { source: '解析大块字符串', target: '返回结果' },
+                            { source: '解析数组', target: '递归解析元素' },
+                            { source: '递归解析元素', target: '返回结果' }
+                        ],
+                        lineStyle: {
+                            color: 'source',
+                            curveness: 0.3
+                        },
+                        force: {
+                            repulsion: 1000,
+                            edgeLength: 120
+                        }
+                    }
+                ]
+            });
+            
+            // Resize charts when window is resized
+            window.addEventListener('resize', function() {
+                protocolTimelineChart.resize();
+                resp3Chart.resize();
+                requestResponseDiagram.resize();
+                encodingVisualization.resize();
+                applicationsChart.resize();
+                respComparisonChart.resize();
+                implementationFlow.resize();
+            });
+        });
+    </script>
+</body>
+</html>
