@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大小端（Endianness）详解</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/framer-motion/10.16.4/framer-motion.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .gradient-orange {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+        }
+        
+        .gradient-blue {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+        
+        .gradient-purple {
+            background: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%);
+        }
+        
+        .gradient-green {
+            background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+        }
+        
+        .bento-card {
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .highlight-text {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .memory-cell {
+            transition: all 0.3s ease;
+        }
+        
+        .memory-cell:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .scroll-reveal {
+            opacity: 0;
+            transform: translateY(50px);
+            transition: all 0.8s ease;
+        }
+        
+        .scroll-reveal.revealed {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .floating-element {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes pulse-glow {
+            from { box-shadow: 0 0 20px rgba(102, 126, 234, 0.3); }
+            to { box-shadow: 0 0 30px rgba(102, 126, 234, 0.6); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 via-white to-purple-50 min-h-screen">
+    <!-- Hero Section -->
+    <section id="hero-section-a1b2c3d4" class="min-h-screen flex items-center justify-center relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-100/30 to-purple-100/30"></div>
+        <div class="container mx-auto px-6 relative z-10">
+            <div class="text-center scroll-reveal">
+                <div class="floating-element mb-8">
+                    <i class="fas fa-microchip text-8xl text-blue-500 mb-6"></i>
+                </div>
+                <h1 class="text-8xl md:text-9xl font-black mb-6 highlight-text">
+                    大小端
+                </h1>
+                <p class="text-3xl md:text-4xl font-light text-gray-600 mb-4">
+                    Endianness
+                </p>
+                <p class="text-xl text-gray-500 max-w-3xl mx-auto leading-relaxed">
+                    计算机科学中描述多字节数据在内存中存储顺序的核心概念
+                </p>
+                <div class="mt-12">
+                    <div class="inline-flex items-center space-x-4 bg-white/80 backdrop-blur-sm rounded-full px-8 py-4 shadow-lg">
+                        <span class="text-2xl font-bold text-blue-600">01</span>
+                        <span class="text-gray-400">|</span>
+                        <span class="text-lg text-gray-700">Big-Endian</span>
+                        <span class="text-gray-400">|</span>
+                        <span class="text-lg text-gray-700">Little-Endian</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Basic Concepts Section -->
+    <section id="concepts-section-e5f6g7h8" class="py-20">
+        <div class="container mx-auto px-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Big Endian Card -->
+                <div class="bento-card gradient-orange rounded-3xl p-8 scroll-reveal">
+                    <div class="text-center">
+                        <div class="text-6xl font-black text-white mb-4">BIG</div>
+                        <div class="text-2xl font-bold text-gray-800 mb-6">大端序</div>
+                        <div class="bg-white/30 rounded-2xl p-6 mb-6">
+                            <i class="fas fa-arrow-right text-4xl text-gray-700 mb-4"></i>
+                            <p class="text-gray-700 font-medium">高位字节 → 低地址</p>
+                            <p class="text-gray-700 font-medium">低位字节 → 高地址</p>
+                        </div>
+                        <p class="text-gray-600 text-sm">符合人类阅读习惯</p>
+                    </div>
+                </div>
+
+                <!-- Concept Illustration -->
+                <div class="bento-card bg-white/80 rounded-3xl p-8 scroll-reveal">
+                    <div class="text-center">
+                        <div class="text-4xl font-black text-gray-800 mb-6">0x12345678</div>
+                        <div class="space-y-4">
+                            <div class="flex justify-center space-x-2">
+                                <div class="memory-cell bg-blue-100 rounded-lg p-3 text-center">
+                                    <div class="text-xs text-gray-500">0x1000</div>
+                                    <div class="font-bold text-blue-600">12</div>
+                                </div>
+                                <div class="memory-cell bg-blue-100 rounded-lg p-3 text-center">
+                                    <div class="text-xs text-gray-500">0x1001</div>
+                                    <div class="font-bold text-blue-600">34</div>
+                                </div>
+                                <div class="memory-cell bg-blue-100 rounded-lg p-3 text-center">
+                                    <div class="text-xs text-gray-500">0x1002</div>
+                                    <div class="font-bold text-blue-600">56</div>
+                                </div>
+                                <div class="memory-cell bg-blue-100 rounded-lg p-3 text-center">
+                                    <div class="text-xs text-gray-500">0x1003</div>
+                                    <div class="font-bold text-blue-600">78</div>
+                                </div>
+                            </div>
+                            <div class="text-sm text-gray-500">Big-Endian 存储方式</div>
+                            <div class="flex justify-center space-x-2 mt-6">
+                                <div class="memory-cell bg-purple-100 rounded-lg p-3 text-center">
+                                    <div class="text-xs text-gray-500">0x1000</div>
+                                    <div class="font-bold text-purple-600">78</div>
+                                </div>
+                                <div class="memory-cell bg-purple-100 rounded-lg p-3 text-center">
+                                    <div class="text-xs text-gray-500">0x1001</div>
+                                    <div class="font-bold text-purple-600">56</div>
+                                </div>
+                                <div class="memory-cell bg-purple-100 rounded-lg p-3 text-center">
+                                    <div class="text-xs text-gray-500">0x1002</div>
+                                    <div class="font-bold text-purple-600">34</div>
+                                </div>
+                                <div class="memory-cell bg-purple-100 rounded-lg p-3 text-center">
+                                    <div class="text-xs text-gray-500">0x1003</div>
+                                    <div class="font-bold text-purple-600">12</div>
+                                </div>
+                            </div>
+                            <div class="text-sm text-gray-500">Little-Endian 存储方式</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Little Endian Card -->
+                <div class="bento-card gradient-purple rounded-3xl p-8 scroll-reveal">
+                    <div class="text-center">
+                        <div class="text-6xl font-black text-white mb-4">LITTLE</div>
+                        <div class="text-2xl font-bold text-gray-800 mb-6">小端序</div>
+                        <div class="bg-white/30 rounded-2xl p-6 mb-6">
+                            <i class="fas fa-arrow-left text-4xl text-gray-700 mb-4"></i>
+                            <p class="text-gray-700 font-medium">低位字节 → 低地址</p>
+                            <p class="text-gray-700 font-medium">高位字节 → 高地址</p>
+                        </div>
+                        <p class="text-gray-600 text-sm">符合计算机处理习惯</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Systems Section -->
+    <section id="systems-section-i9j0k1l2" class="py-20 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16 scroll-reveal">
+                <h2 class="text-6xl font-black text-gray-800 mb-6">不同系统的实现</h2>
+                <p class="text-xl text-gray-600">Different System Implementations</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Big Endian Systems -->
+                <div class="bento-card bg-white/80 rounded-3xl p-8 scroll-reveal">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-server text-5xl text-blue-500 mb-4"></i>
+                        <h3 class="text-3xl font-bold text-gray-800 mb-2">大端序系统</h3>
+                        <p class="text-lg text-blue-600 font-medium">Big-Endian Systems</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-blue-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">IBM 大型机</div>
+                            <div class="text-sm text-gray-600">IBM Mainframes</div>
+                        </div>
+                        <div class="bg-blue-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">Sun SPARC</div>
+                            <div class="text-sm text-gray-600">SPARC Architecture</div>
+                        </div>
+                        <div class="bg-blue-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">网络协议</div>
+                            <div class="text-sm text-gray-600">Network Protocols</div>
+                        </div>
+                        <div class="bg-blue-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">PowerPC (部分)</div>
+                            <div class="text-sm text-gray-600">PowerPC (Some versions)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Little Endian Systems -->
+                <div class="bento-card bg-white/80 rounded-3xl p-8 scroll-reveal">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-desktop text-5xl text-purple-500 mb-4"></i>
+                        <h3 class="text-3xl font-bold text-gray-800 mb-2">小端序系统</h3>
+                        <p class="text-lg text-purple-600 font-medium">Little-Endian Systems</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-purple-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">Intel x86</div>
+                            <div class="text-sm text-gray-600">x86 Architecture</div>
+                        </div>
+                        <div class="bg-purple-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">AMD64</div>
+                            <div class="text-sm text-gray-600">AMD64 Architecture</div>
+                        </div>
+                        <div class="bg-purple-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">ARM (默认)</div>
+                            <div class="text-sm text-gray-600">ARM (Default mode)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bi-Endian Systems -->
+                <div class="bento-card bg-white/80 rounded-3xl p-8 scroll-reveal">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-exchange-alt text-5xl text-green-500 mb-4"></i>
+                        <h3 class="text-3xl font-bold text-gray-800 mb-2">混合端序</h3>
+                        <p class="text-lg text-green-600 font-medium">Bi-Endian Systems</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-green-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">ARM (可切换)</div>
+                            <div class="text-sm text-gray-600">ARM (Switchable)</div>
+                        </div>
+                        <div class="bg-green-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">MIPS</div>
+                            <div class="text-sm text-gray-600">MIPS Architecture</div>
+                        </div>
+                        <div class="bg-green-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">PowerPC (新版)</div>
+                            <div class="text-sm text-gray-600">PowerPC (New versions)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Detection Section -->
+    <section id="detection-section-m3n4o5p6" class="py-20">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16 scroll-reveal">
+                <h2 class="text-6xl font-black text-gray-800 mb-6">大小端检测</h2>
+                <p class="text-xl text-gray-600">Endianness Detection Methods</p>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Method 1 -->
+                <div class="bento-card gradient-blue rounded-3xl p-8 scroll-reveal">
+                    <div class="mb-6">
+                        <h3 class="text-3xl font-bold text-gray-800 mb-2">方法一</h3>
+                        <p class="text-lg text-gray-600">指针类型转换检测</p>
+                    </div>
+                    <div class="code-block p-6">
+                        <pre><code class="language-c">bool is_little_endian() {
+    unsigned int x = 1;
+    return *((unsigned char *)&x) == 1;
+}</code></pre>
+                    </div>
+                    <div class="mt-6 bg-white/30 rounded-xl p-4">
+                        <p class="text-gray-700 text-sm">通过检查整数1的最低字节来判断字节序</p>
+                    </div>
+                </div>
+
+                <!-- Method 2 -->
+                <div class="bento-card gradient-green rounded-3xl p-8 scroll-reveal">
+                    <div class="mb-6">
+                        <h3 class="text-3xl font-bold text-gray-800 mb-2">方法二</h3>
+                        <p class="text-lg text-gray-600">联合体检测方法</p>
+                    </div>
+                    <div class="code-block p-6">
+                        <pre><code class="language-c">union {
+    unsigned int i;
+    unsigned char c[4];
+} u;
+
+u.i = 0x12345678;
+if (u.c[0] == 0x78) {
+    printf("系统是小端序\n");
+} else {
+    printf("系统是大端序\n");
+}</code></pre>
+                    </div>
+                    <div class="mt-6 bg-white/30 rounded-xl p-4">
+                        <p class="text-gray-700 text-sm">使用联合体直观地观察字节存储顺序</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Applications Section -->
+    <section id="applications-section-q7r8s9t0" class="py-20 bg-gradient-to-r from-purple-50 to-blue-50">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16 scroll-reveal">
+                <h2 class="text-6xl font-black text-gray-800 mb-6">应用场景</h2>
+                <p class="text-xl text-gray-600">Practical Applications</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Network Communication -->
+                <div class="bento-card bg-white/80 rounded-3xl p-8 scroll-reveal pulse-glow">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-network-wired text-5xl text-blue-500 mb-4"></i>
+                        <h3 class="text-2xl font-bold text-gray-800">网络通信</h3>
+                        <p class="text-blue-600 font-medium">Network Communication</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-blue-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800 mb-2">网络字节序</div>
+                            <p class="text-sm text-gray-600">统一使用大端序作为标准</p>
+                        </div>
+                        <div class="code-block p-4">
+                            <pre><code class="language-c">// 转换函数
+uint32_t htonl(uint32_t hostlong);
+uint16_t htons(uint16_t hostshort);
+uint32_t ntohl(uint32_t netlong);
+uint16_t ntohs(uint16_t netshort);</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Formats -->
+                <div class="bento-card bg-white/80 rounded-3xl p-8 scroll-reveal">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-file-alt text-5xl text-purple-500 mb-4"></i>
+                        <h3 class="text-2xl font-bold text-gray-800">文件格式</h3>
+                        <p class="text-purple-600 font-medium">File Formats</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-purple-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">BMP 图像</div>
+                            <div class="text-sm text-gray-600">小端序</div>
+                        </div>
+                        <div class="bg-purple-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">JPEG 文件</div>
+                            <div class="text-sm text-gray-600">大端序</div>
+                        </div>
+                        <div class="bg-purple-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">UTF-16</div>
+                            <div class="text-sm text-gray-600">BE/LE 两种模式</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cross-platform Development -->
+                <div class="bento-card bg-white/80 rounded-3xl p-8 scroll-reveal">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-code text-5xl text-green-500 mb-4"></i>
+                        <h3 class="text-2xl font-bold text-gray-800">跨平台开发</h3>
+                        <p class="text-green-600 font-medium">Cross-platform Development</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="bg-green-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">二进制数据</div>
+                            <div class="text-sm text-gray-600">Binary Data Processing</div>
+                        </div>
+                        <div class="bg-green-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">文件 I/O</div>
+                            <div class="text-sm text-gray-600">File Input/Output</div>
+                        </div>
+                        <div class="bg-green-50 rounded-xl p-4">
+                            <div class="font-semibold text-gray-800">数据交换</div>
+                            <div class="text-sm text-gray-600">Data Exchange</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- History Section -->
+    <section id="history-section-u1v2w3x4" class="py-20">
+        <div class="container mx-auto px-6">
+            <div class="bento-card gradient-orange rounded-3xl p-12 scroll-reveal">
+                <div class="text-center mb-12">
+                    <i class="fas fa-book text-6xl text-white mb-6"></i>
+                    <h2 class="text-5xl font-black text-white mb-4">历史由来</h2>
+                    <p class="text-2xl text-white/80">Historical Origin</p>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    <div class="bg-white/20 rounded-2xl p-8">
+                        <h3 class="text-3xl font-bold text-white mb-6">《格列佛游记》</h3>
+                        <p class="text-white/90 text-lg leading-relaxed mb-6">
+                            "大端"和"小端"术语源自乔纳森·斯威夫特的小说《格列佛游记》。小人国的人们为了吃鸡蛋应该从大头（Big-End）还是小头（Little-End）敲开而争论不休，甚至为此发动了战争。
+                        </p>
+                        <div class="bg-white/10 rounded-xl p-4">
+                            <p class="text-white/80 text-sm">
+                                1980年，丹尼·科恩在论文《论大端和小端》中借用了这个典故来描述字节序。
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="bg-white/20 rounded-full w-48 h-48 mx-auto flex items-center justify-center mb-6">
+                            <i class="fas fa-egg text-8xl text-white"></i>
+                        </div>
+                        <div class="text-white text-lg font-medium">
+                            Big-End vs Little-End
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Summary Section -->
+    <section id="summary-section-y5z6a7b8" class="py-20 bg-gradient-to-br from-blue-50 to-purple-50">
+        <div class="container mx-auto px-6">
+            <div class="text-center mb-16 scroll-reveal">
+                <h2 class="text-6xl font-black text-gray-800 mb-6">总结</h2>
+                <p class="text-xl text-gray-600">Summary & Key Points</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="bento-card bg-white/80 rounded-3xl p-6 text-center scroll-reveal">
+                    <div class="text-4xl font-black text-blue-600 mb-4">01</div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">大端序</h3>
+                    <p class="text-gray-600 text-sm">符合人类阅读习惯<br>高位字节在前</p>
+                </div>
+                
+                <div class="bento-card bg-white/80 rounded-3xl p-6 text-center scroll-reveal">
+                    <div class="text-4xl font-black text-purple-600 mb-4">02</div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">小端序</h3>
+                    <p class="text-gray-600 text-sm">符合计算机处理习惯<br>低位字节在前</p>
+                </div>
+                
+                <div class="bento-card bg-white/80 rounded-3xl p-6 text-center scroll-reveal">
+                    <div class="text-4xl font-black text-green-600 mb-4">03</div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">网络字节序</h3>
+                    <p class="text-gray-600 text-sm">统一采用大端序<br>确保数据一致性</p>
+                </div>
+                
+                <div class="bento-card bg-white/80 rounded-3xl p-6 text-center scroll-reveal">
+                    <div class="text-4xl font-black text-orange-600 mb-4">04</div>
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">实际应用</h3>
+                    <p class="text-gray-600 text-sm">网络编程、文件格式<br>跨平台开发</p>
+                </div>
+            </div>
+            
+            <div class="mt-16 text-center scroll-reveal">
+                <div class="bento-card bg-white/80 rounded-3xl p-12 max-w-4xl mx-auto">
+                    <h3 class="text-3xl font-bold text-gray-800 mb-6">核心要点</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                        <div>
+                            <i class="fas fa-memory text-3xl text-blue-500 mb-4"></i>
+                            <h4 class="font-bold text-gray-800 mb-2">内存存储</h4>
+                            <p class="text-gray-600 text-sm">多字节数据的存储顺序决定了系统的字节序特性</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-exchange-alt text-3xl text-purple-500 mb-4"></i>
+                            <h4 class="font-bold text-gray-800 mb-2">数据转换</h4>
+                            <p class="text-gray-600 text-sm">不同系统间通信需要进行适当的字节序转换</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-cogs text-3xl text-green-500 mb-4"></i>
+                            <h4 class="font-bold text-gray-800 mb-2">系统兼容</h4>
+                            <p class="text-gray-600 text-sm">了解字节序对于底层开发和系统集成至关重要</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        // Scroll reveal animation
+        function revealOnScroll() {
+            const reveals = document.querySelectorAll('.scroll-reveal');
+            
+            reveals.forEach(reveal => {
+                const windowHeight = window.innerHeight;
+                const elementTop = reveal.getBoundingClientRect().top;
+                const elementVisible = 150;
+                
+                if (elementTop < windowHeight - elementVisible) {
+                    reveal.classList.add('revealed');
+                }
+            });
+        }
+
+        // Smooth scrolling
+        function smoothScroll() {
+            const scrolled = window.pageYOffset;
+            const parallax = document.querySelector('#hero-section-a1b2c3d4');
+            const speed = scrolled * 0.5;
+            
+            if (parallax) {
+                parallax.style.transform = `translateY(${speed}px)`;
+            }
+        }
+
+        // Memory cell hover effects
+        function initMemoryCells() {
+            const cells = document.querySelectorAll('.memory-cell');
+            
+            cells.forEach(cell => {
+                cell.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-5px) scale(1.05)';
+                    this.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.15)';
+                });
+                
+                cell.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0) scale(1)';
+                    this.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.1)';
+                });
+            });
+        }
+
+        // Interactive endianness demonstration
+        function createInteractiveDemo() {
+            const demoContainer = document.querySelector('#concepts-section-e5f6g7h8');
+            if (!demoContainer) return;
+
+            const memoryVisualization = demoContainer.querySelector('.memory-cell');
+            if (memoryVisualization) {
+                setInterval(() => {
+                    const cells = demoContainer.querySelectorAll('.memory-cell');
+                    cells.forEach((cell, index) => {
+                        setTimeout(() => {
+                            cell.style.transform = 'scale(1.1)';
+                            setTimeout(() => {
+                                cell.style.transform = 'scale(1)';
+                            }, 200);
+                        }, index * 100);
+                    });
+                }, 3000);
+            }
+        }
+
+        // Initialize all animations and interactions
+        function init() {
+            revealOnScroll();
+            initMemoryCells();
+            createInteractiveDemo();
+            
+            // Initialize Prism.js for syntax highlighting
+            if (typeof Prism !== 'undefined') {
+                Prism.highlightAll();
+            }
+        }
+
+        // Event listeners
+        window.addEventListener('scroll', () => {
+            revealOnScroll();
+            smoothScroll();
+        });
+
+        window.addEventListener('load', init);
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Add some interactive elements
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('memory-cell')) {
+                e.target.style.background = `hsl(${Math.random() * 360}, 70%, 85%)`;
+                setTimeout(() => {
+                    e.target.style.background = '';
+                }, 1000);
+            }
+        });
+    </script>
+</body>
+</html>
